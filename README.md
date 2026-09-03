@@ -15,9 +15,11 @@ they're building against.
 1. Both read `contracts/VERSIONING.md` and `contracts/units.md`.
 2. Fill in `TOOLCHAIN.md`'s Android section together (JDK/Kotlin/AGP/Gradle
    versions) — five minutes, once, prevents a week of "works on my machine."
-3. `git init`, commit everything in this scaffold as the first commit,
-   push to a shared GitHub repo, protect `main` (require PR review + the
-   `contracts-ci` status check before merge).
+3. Repo is on GitHub: https://github.com/giri-harsh/Dhruva. `main` is
+   protected (PR + 1 approval required, no force pushes, no deletions).
+   Once `contracts-ci` has run at least once (triggers automatically on
+   the first push to a branch), add its three jobs to the branch
+   protection rule's required status checks too.
 4. From here you work independently on separate branches. The `contracts/`
    folder is the only thing you both touch, and only with a heads-up
    message first (see `VERSIONING.md`).
