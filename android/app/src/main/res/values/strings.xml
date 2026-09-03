@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Section9.4's rule from commit one: all user-facing text lives here,
+        never as a Kotlin string literal in a Composable -- so adding a
+        language later requires zero code changes. This file has exactly
+        one placeholder string because Week 1 has no real UI yet
+        (Milestones 1-5 stop at the ONNX adapter, deliberately, per the
+        reordering in this session own report) -- the point is to have the
+        RIGHT HABIT in place before real strings accumulate, not to have
+        many strings yet.
+    -->
+    <string name="app_name">Dhruva</string>
+    <string name="week1_placeholder">Dhruva -- on-device engine foundations (Week 1). No live UI yet: replay, alignment, and the model adapter are built and unit-tested in :core; the map/marker/confidence-ring UI (FR-17) is later-phase work.</string>
+</resources>
