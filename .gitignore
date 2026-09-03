@@ -30,6 +30,12 @@ wandb/
 data/raw/
 *.osm.pbf
 
+# Secrets / local config
+.env
+ml/export/keys/
+backend/_registry_store/
+maps/_build/
+
 # OS noise
 .DS_Store
 Thumbs.db
