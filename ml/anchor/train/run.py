@@ -49,8 +49,9 @@ def main() -> None:
         cfg.max_epochs = args.max_epochs
     if args.smoke:
         cfg.seeds = (0,)
-        cfg.max_epochs = 3
-        cfg.patience = 3
+        cfg.max_epochs = 4
+        cfg.warmup_epochs = 2
+        cfg.patience = 4
 
     name = args.out or f"ml/train/runs/{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}"
     out_dir = _ROOT / name if not Path(name).is_absolute() else Path(name)

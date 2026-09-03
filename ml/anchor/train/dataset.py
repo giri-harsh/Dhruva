@@ -53,6 +53,7 @@ class AnchorWindowDataset(Dataset):
         training: bool,
         augmenter: Augmenter | None = None,
         seed: int = 0,
+        weak_weight: float = 0.4,
     ):
         self.norm = normalizer
         self.training = training
@@ -64,10 +65,13 @@ class AnchorWindowDataset(Dataset):
         self.index: list[tuple[str, int, int]] = []
         self._target = []          # mean speed per window (precomputed once)
         self._sigma = []           # label sigma on SPEED per window (precomputed once)
+        self._mean_w = []          # mean-head loss weight (down-weight `weak` seqs)
         win_dur_s = WINDOW_SIZE_SAMPLES / SAMPLE_RATE_HZ
         for seq in sequences:
-            if seq.meta.get("usability") == "drop":
+            u = seq.meta.get("usability")
+            if u == "drop":
                 continue
+            w_seq = 1.0 if u == "use" else weak_weight
             self.feats[seq.seq_id] = aligned_features(seq)
             lab = SequenceLabeller(seq, radius_m)
             for w in win.windows(seq):
@@ -75,8 +79,10 @@ class AnchorWindowDataset(Dataset):
                 self.index.append((seq.seq_id, w.start, w.stop))
                 self._target.append(wl.mean_speed_mps)
                 self._sigma.append(wl.label_sigma_m / win_dur_s)
+                self._mean_w.append(w_seq)
         self._target = np.asarray(self._target, dtype=np.float32)
         self._sigma = np.asarray(self._sigma, dtype=np.float32)
+        self._mean_w = np.asarray(self._mean_w, dtype=np.float32)
 
     def __len__(self) -> int:
         return len(self.index)
@@ -94,6 +100,7 @@ class AnchorWindowDataset(Dataset):
             "x": torch.from_numpy(np.ascontiguousarray(x, dtype=np.float32)),
             "target_speed": torch.tensor(self._target[i], dtype=torch.float32),
             "label_sigma": torch.tensor(self._sigma[i], dtype=torch.float32),
+            "mean_weight": torch.tensor(self._mean_w[i], dtype=torch.float32),
             "seq_id": seq_id,
         }
 

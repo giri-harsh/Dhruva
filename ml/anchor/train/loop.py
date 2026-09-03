@@ -22,40 +22,47 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 from ..models.anchornet import AnchorNet, AnchorNetConfig
 from .augment import Augmenter
 from .dataset import AnchorWindowDataset
-from .losses import context_loss, gaussian_nll, yaw_loss
+from .losses import context_loss, speed_loss, yaw_loss
 
 _ROOT = Path(__file__).resolve().parents[3]
 
 
 @dataclass
 class TrainConfig:
-    lr: float = 3e-4
+    lr: float = 5e-4
     weight_decay: float = 1e-4
-    batch_size: int = 256
-    max_epochs: int = 200
+    batch_size: int = 512
+    max_epochs: int = 120
+    warmup_epochs: int = 8            # pure-MSE phase before beta-NLL (probe: NLL-from-scratch is degenerate)
     patience: int = 15
     lambda_context: float = 0.2
     lambda_yaw: float = 0.2
     seeds: tuple[int, ...] = (0, 1, 2, 3, 4)
     num_workers: int = 0
+    num_threads: int = 5             # this box thrashes at torch's default 12
     model: AnchorNetConfig = field(default_factory=AnchorNetConfig)
 
 
-def _seed_everything(s: int):
+def _seed_everything(s: int, threads: int = 5):
     random.seed(s); np.random.seed(s); torch.manual_seed(s)
     torch.use_deterministic_algorithms(True, warn_only=True)
+    torch.set_num_threads(threads)
 
 
-def _run_epoch(model, loader, opt, cfg, train: bool, device):
+def _run_epoch(model, loader, opt, cfg, train: bool, device, *, use_nll: bool):
     model.train(train)
-    agg = {"loss": 0.0, "nll": 0.0, "rmse": 0.0, "sigma": 0.0, "n": 0}
+    agg = {"loss": 0.0, "nll": 0.0, "rmse": 0.0, "bias": 0.0, "sigma": 0.0, "n": 0}
     for batch in loader:
         x = batch["x"].to(device)
         y = batch["target_speed"].to(device)
         ls = batch["label_sigma"].to(device)
+        w = batch.get("mean_weight")
+        w = w.to(device) if w is not None else None
         with torch.set_grad_enabled(train):
             out = model(x)
-            loss, stats = gaussian_nll(out["velocity_mean_mps"], out["velocity_log_variance"], y, ls)
+            loss, stats = speed_loss(
+                out["velocity_mean_mps"], out["velocity_log_variance"], y, ls,
+                use_nll=use_nll, sample_weight=w)
             if "context_logits" in out and "context_label" in batch:
                 loss = loss + cfg.lambda_context * context_loss(
                     out["context_logits"], batch["context_label"].to(device),
@@ -68,18 +75,20 @@ def _run_epoch(model, loader, opt, cfg, train: bool, device):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
                 opt.step()
         bs = x.size(0)
-        agg["loss"] += float(loss) * bs
+        for k in ("loss",):
+            agg[k] += float(loss) * bs
         agg["nll"] += stats["nll"] * bs
         agg["rmse"] += stats["rmse"] * bs
+        agg["bias"] += stats["bias"] * bs
         agg["sigma"] += stats["pred_sigma_mean"] * bs
         agg["n"] += bs
     n = max(agg["n"], 1)
-    return {k: agg[k] / n for k in ("loss", "nll", "rmse", "sigma")}
+    return {k: agg[k] / n for k in ("loss", "nll", "rmse", "bias", "sigma")}
 
 
 def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: TrainConfig,
                    out_dir: Path, device="cpu") -> dict:
-    _seed_everything(seed)
+    _seed_everything(seed, cfg.num_threads)
     aug = Augmenter()
     ds_tr = AnchorWindowDataset(train_seqs, radius_m=radius_m, normalizer=normalizer,
                                 training=True, augmenter=aug, seed=seed)
@@ -95,25 +104,30 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=cfg.max_epochs)
 
     print(f"  seed {seed}: {len(ds_tr)} train / {len(ds_va)} val windows, "
-          f"{model.num_parameters()} params", flush=True)
-    best = {"val_nll": float("inf"), "epoch": -1, "state": None}
+          f"{model.num_parameters()} params, warmup {cfg.warmup_epochs} (MSE) then beta-NLL",
+          flush=True)
+    # selection metric is val RMSE — that is the deliverable. Only start
+    # tracking "best" once beta-NLL is on (post-warmup) so calibration is real.
+    best = {"val_rmse": float("inf"), "epoch": -1, "state": None}
     history = []
     for epoch in range(cfg.max_epochs):
+        use_nll = epoch >= cfg.warmup_epochs
         t0 = time.time()
-        tr = _run_epoch(model, dl_tr, opt, cfg, True, device)
-        va = _run_epoch(model, dl_va, opt, cfg, False, device)
+        tr = _run_epoch(model, dl_tr, opt, cfg, True, device, use_nll=use_nll)
+        va = _run_epoch(model, dl_va, opt, cfg, False, device, use_nll=use_nll)
         sched.step()
         dt = round(time.time() - t0, 1)
-        history.append({"epoch": epoch, "train": tr, "val": va, "s": dt})
-        improved = va["nll"] < best["val_nll"] - 1e-4
-        if improved:
-            best = {"val_nll": va["nll"], "epoch": epoch,
+        history.append({"epoch": epoch, "phase": "nll" if use_nll else "mse",
+                        "train": tr, "val": va, "s": dt})
+        improved = va["rmse"] < best["val_rmse"] - 1e-3
+        if improved and (use_nll or epoch >= cfg.warmup_epochs - 2):
+            best = {"val_rmse": va["rmse"], "val_nll": va["nll"], "epoch": epoch,
                     "state": {k: v.cpu().clone() for k, v in model.state_dict().items()}}
-        print(f"  seed {seed} e{epoch:03d} {dt:5.1f}s  "
-              f"train_nll={tr['nll']:.4f} val_nll={va['nll']:.4f} "
-              f"val_rmse={va['rmse']:.3f} sigma={va['sigma']:.3f}"
+        print(f"  seed {seed} e{epoch:03d} {dt:5.1f}s [{'nll' if use_nll else 'mse'}]  "
+              f"tr_rmse={tr['rmse']:.3f} val_rmse={va['rmse']:.3f} "
+              f"val_bias={va['bias']:+.2f} sigma={va['sigma']:.2f}"
               f"{'  *' if improved else ''}", flush=True)
-        if not improved and epoch - best["epoch"] >= cfg.patience:
+        if best["epoch"] >= 0 and epoch - best["epoch"] >= cfg.patience:
             break
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -123,8 +137,8 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
         "seed": seed,
         "n_params": model.num_parameters(),
         "best_epoch": best["epoch"],
-        "best_val_nll": best["val_nll"],
-        "best_val_rmse": history[best["epoch"]]["val"]["rmse"] if history else None,
+        "best_val_nll": best.get("val_nll"),
+        "best_val_rmse": best["val_rmse"] if best["epoch"] >= 0 else None,
         "epochs_run": len(history),
         "history": history,
     }

@@ -24,10 +24,15 @@ report the spread (tyre pressure / temperature drift across drives).
                "true" displacement we regressed against is itself uncertain.
                REQUIRED — without it the variance head trains against an
                artificially tight label and calibrates optimistically.
-  σ_sync     : phone/vehicle time-sync uncertainty (~0.5 s, measured — see
-               ml/docs/IO-VNBD-verification.md §8) × mean window speed. A window
-               labelled with the wrong 0.5 s of vehicle motion is wrong by
-               roughly (0.5 s · speed).
+  σ_sync     : a phone/vehicle timing offset τ mislabels a MEAN-SPEED window by
+               ~ τ · |Δspeed across the window| (NOT τ · speed — the mean speed
+               of a smooth 2 s window barely moves under a small shift; only a
+               hard accel/brake window is genuinely more uncertain). Measured
+               zero-lag phone↔vehicle sync is tight (sync_speed_corr 0.75-0.97),
+               so τ ≈ 0.3 s, plus a per-sequence constant scaled by
+               (1 - sync_speed_corr) for the residual whole-sequence offset.
+               [earlier revision used τ · speed, which swamped the label at ~3-7
+               m/s and starved the mean head — see ml/docs/training-notes.md]
   σ_mount    : sequence-usability multiplier folded in as a relative term
                (use ×1.0, weak ×1.6, drop ×3.0) on the combined above — a
                loosely-mounted phone's window is a worse training example and
@@ -45,8 +50,9 @@ DT_S = 1.0 / SAMPLE_RATE_HZ
 STRAIGHT_YAW_RADPS = 0.03
 CLEAN_MIN_SPEED_MPS = 5.0
 CLEAN_MIN_SATS = 4
-SYNC_UNCERTAINTY_S = 0.5
-_USABILITY_MULT = {"use": 1.0, "weak": 1.6, "drop": 3.0, "excluded": 3.0}
+SYNC_UNCERTAINTY_S = 0.3
+SYNC_SEQ_OFFSET_SCALE_M = 2.0        # per-seq constant = (1 - sync_speed_corr) * this
+_USABILITY_MULT = {"use": 1.0, "weak": 1.4, "drop": 3.0, "excluded": 3.0}
 WHEEL_COLS = ["veh_wheel_fl_radps", "veh_wheel_fr_radps",
               "veh_wheel_rl_radps", "veh_wheel_rr_radps"]
 
@@ -122,6 +128,8 @@ class SequenceLabeller:
         self.vbox = df["veh_speed_mps"].to_numpy()
         self.seq_gnss_rmse = _seq_gnss_speed_rmse(df, radius_m)
         self.usability = seq.meta.get("usability", "weak")
+        sc = seq.meta.get("sync_speed_corr")
+        self.sync_offset_m = SYNC_SEQ_OFFSET_SCALE_M * (1.0 - (sc if sc is not None else 0.85))
 
     def label(self, start: int, stop: int) -> WindowLabel:
         sl = slice(start, stop)
@@ -138,8 +146,10 @@ class SequenceLabeller:
         # σ_gnss : sequence clean-stretch speed RMSE, propagated over the window
         s_gnss = self.seq_gnss_rmse * dur
 
-        # σ_sync : time alignment slack
-        s_sync = SYNC_UNCERTAINTY_S * abs(mean_speed)
+        # σ_sync : timing-offset error ~ tau * |Δspeed over window|, plus a
+        # per-sequence constant for a residual whole-sequence offset.
+        dspeed = float(abs(wheel_speed[-1] - wheel_speed[0])) if len(wheel_speed) else 0.0
+        s_sync = float(np.hypot(SYNC_UNCERTAINTY_S * dspeed, self.sync_offset_m))
 
         base = float(np.sqrt(s_wheelcan ** 2 + s_gnss ** 2 + s_sync ** 2))
         sigma = base * _USABILITY_MULT.get(self.usability, 1.6)
@@ -153,7 +163,9 @@ class SequenceLabeller:
                 "sigma_wheelcan_m": round(s_wheelcan, 4),
                 "sigma_gnss_m": round(s_gnss, 4),
                 "sigma_sync_m": round(s_sync, 4),
-                "usability_mult": _USABILITY_MULT.get(self.usability, 1.6),
+                "sigma_sync_seq_offset_m": round(self.sync_offset_m, 4),
+                "dspeed_over_window_mps": round(dspeed, 4),
+                "usability_mult": _USABILITY_MULT.get(self.usability, 1.4),
                 "seq_gnss_speed_rmse_mps": round(self.seq_gnss_rmse, 4),
             },
         )
