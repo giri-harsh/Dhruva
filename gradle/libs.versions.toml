@@ -1,0 +1,55 @@
+# Every version here is pinned exactly, per TOOLCHAIN.md's own rule --
+# no "+", no "latest.release". A version changes here and ONLY here;
+# TOOLCHAIN.md's Android table is the narrative explaining WHY each
+# number was picked, this file is the enforced source of truth.
+#
+# NOTE (2026-09-03): none of this has been through a real Gradle sync --
+# this dev machine has no JDK 17+/Android SDK/Gradle. Correct per Maven
+# Central / Google Maven at pin time; first ./gradlew run is the real check.
+
+[versions]
+kotlin = "2.4.0"
+agp = "9.3.0"
+composeBom = "2026.08.00"
+onnxruntime = "1.29.0"
+orgJson = "20260814"
+junitJupiter = "5.11.4"
+kotlinxCoroutines = "1.9.0"
+archunit = "1.3.0"
+androidxCoreKtx = "1.15.0"
+androidxLifecycle = "2.9.0"
+androidxActivityCompose = "1.10.1"
+
+[libraries]
+# ---- shared across :core and its consumers ----
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+
+# ---- ONNX Runtime: two DIFFERENT artifacts, same version, same
+#      ai.onnxruntime.* API surface. :core depends on neither directly at
+#      `implementation` scope (compileOnly + testImplementation only --
+#      see core/build.gradle.kts for why). Each leaf module supplies its
+#      own native runtime. See TOOLCHAIN.md's "ONNX Runtime -- desktop" row. ----
+onnxruntime-desktop = { group = "com.microsoft.onnxruntime", name = "onnxruntime", version.ref = "onnxruntime" }
+onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
+
+# ---- test ----
+junit-jupiter-api = { group = "org.junit.jupiter", name = "junit-jupiter-api", version.ref = "junitJupiter" }
+junit-jupiter-engine = { group = "org.junit.jupiter", name = "junit-jupiter-engine", version.ref = "junitJupiter" }
+junit-jupiter-params = { group = "org.junit.jupiter", name = "junit-jupiter-params", version.ref = "junitJupiter" }
+archunit-junit5 = { group = "com.tngtech.archunit", name = "archunit-junit5", version.ref = "archunit" }
+
+# ---- Android app only ----
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCoreKtx" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidxLifecycle" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivityCompose" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
