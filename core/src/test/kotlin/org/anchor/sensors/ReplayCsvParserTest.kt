@@ -1,5 +1,6 @@
 package org.anchor.sensors
 
+import org.anchor.contract.ReplayCsvSchema
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -187,10 +188,10 @@ class ReplayCsvParserTest {
             "1000,0.0,0.0,9.8,15.0,0.0,0.0,20.0,-5.0,40.0,0,,,,\n"
         val path = writeCsv("badgyro.csv", csv)
 
-        val ex = assertThrows(IllegalArgumentException::class.java) {
+        val ex = assertThrows(ReplayCsvValidationException::class.java) {
             ReplayCsvParser.parseAndValidate(path)
         }
-        assertTrue(ex.message!!.contains("deg/s-vs-rad/s"), ex.message)
+        assertTrue(ex.message!!.contains("deg/s"), ex.message)
     }
 
     @Test

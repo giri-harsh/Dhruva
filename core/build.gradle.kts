@@ -41,7 +41,11 @@ dependencies {
     testImplementation(libs.junit.jupiter.api)
     testImplementation(libs.junit.jupiter.params)
     testRuntimeOnly(libs.junit.jupiter.engine)
-    testImplementation(libs.archunit.junit5)
+    // Core library only, not archunit-junit5/-api/-engine: TierDependencyTest
+    // calls ArchUnit's plain Java API (ClassFileImporter, noClasses()) from an
+    // ordinary @Test method, not ArchUnit's own @AnalyzeClasses-based JUnit 5
+    // engine, so the engine-integration artifacts are unnecessary weight.
+    testImplementation(libs.archunit)
     // Desktop ONNX Runtime for tests ONLY -- this is what lets the
     // golden-vector test (Sec2.3/Sec7.7 of PRD-ANDROID-ENGINE.md) run as a
     // plain JUnit test on a laptop, no emulator needed. Does not leak into

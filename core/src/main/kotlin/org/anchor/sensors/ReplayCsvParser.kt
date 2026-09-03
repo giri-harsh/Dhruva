@@ -36,7 +36,7 @@ internal data class ParsedRow(
  */
 object ReplayCsvParser {
 
-    fun parseAndValidate(path: Path): List<ParsedRow> {
+    internal fun parseAndValidate(path: Path): List<ParsedRow> {
         val raw = Files.readAllBytes(path)
 
         if (raw.size >= 3 && raw[0] == 0xEF.toByte() && raw[1] == 0xBB.toByte() && raw[2] == 0xBF.toByte()) {
@@ -109,7 +109,7 @@ object ReplayCsvParser {
                             "value convention is an EMPTY field, not any of those tokens).",
                     )
                 }
-                return value!!
+                return value
             }
 
             val timestampMsRaw = fields[0]
@@ -130,6 +130,27 @@ object ReplayCsvParser {
             val accel = Vec3(numeric(1), numeric(2), numeric(3))
             val gyroRaw = Vec3(numeric(4), numeric(5), numeric(6))
             val mag = Vec3(numeric(7), numeric(8), numeric(9))
+
+            // Enforced HERE, not left to SensorEvent.Gyroscope's constructor further
+            // downstream: this parser builds a plain ParsedRow (a Vec3), which
+            // CsvReplaySource later wraps into a SensorEvent.Gyroscope -- if the
+            // magnitude check lived only in that constructor, a row-numbered
+            // diagnostic would be impossible (the constructor has no row context),
+            // and calling parseAndValidate() directly, as ReplayCsvParserTest does,
+            // would silently accept a deg/s-mistaken-for-rad/s row entirely. Found
+            // by actually running the tests, not by inspection -- see the Week-1
+            // verification report for how this was caught.
+            for ((axisName, value) in listOf("gyro_x" to gyroRaw.x, "gyro_y" to gyroRaw.y, "gyro_z" to gyroRaw.z)) {
+                if (kotlin.math.abs(value) >= 10.0) {
+                    fail(
+                        path,
+                        "row $rowIndex, column $axisName has |value| >= 10 rad/s (value=$value, " +
+                            "~573 deg/s) -- no road vehicle yaws that fast. This almost certainly " +
+                            "means gyro was logged in deg/s, not rad/s (contracts/units.md). " +
+                            "Convert with value * pi / 180 at the producer.",
+                    )
+                }
+            }
 
             val gnssValidRaw = fields[ReplayCsvSchema.GNSS_INDEX_VALID]
             if (gnssValidRaw != "0" && gnssValidRaw != "1") {
@@ -183,9 +204,12 @@ object ReplayCsvParser {
                 )
             } else null
 
-            // Gyro own |value|<10 rad/s sanity check runs inside SensorEvent.Gyroscope init
-            // block (defense-in-depth, shared with every other SensorSource) -- constructing
-            // it here is what actually triggers that check for this row.
+            // Gyro magnitude was already checked above, with row context. The
+            // SensorEvent.Gyroscope constructor this ParsedRow eventually feeds
+            // (via CsvReplaySource) carries the SAME assertion independently, as
+            // defense-in-depth for any other SensorSource that might construct a
+            // Gyroscope directly without going through this parser -- not because
+            // this row's check depends on it.
             result.add(
                 ParsedRow(
                     timestampNanos = timestampMs * 1_000_000L,

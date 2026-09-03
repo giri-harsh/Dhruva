@@ -19,7 +19,7 @@ import java.nio.file.Path
  * needs onnxruntime-android on a real/emulated device and is still to
  * build) -- but it exercises the exact same ModelRunner class, the exact
  * same committed anchor_net_stub.onnx, and the exact same committed
- * golden_vectors/*.json, so it is real, independent evidence the Kotlin
+ * golden_vectors directory's JSON files, so it is real, independent evidence the Kotlin
  * port of the contract-reading and inference path is correct, before an
  * Android device is even available to test on.
  *

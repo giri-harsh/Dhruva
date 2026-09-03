@@ -2,6 +2,7 @@ package org.anchor.sensors
 
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import org.anchor.contract.ReplayCsvSchema
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
