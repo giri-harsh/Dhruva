@@ -107,11 +107,15 @@ class AnchorWindowDataset(Dataset):
             "seq_id": seq_id,
         }
 
-    # speed-decile re-weighting sampler weights (PRD §6.6 class balance)
-    def sample_weights(self) -> np.ndarray:
+    # speed-decile re-weighting sampler weights (PRD §6.6 class balance).
+    # `power` softens it (full inverse-freq reweighting measurably hurt overall
+    # RMSE and biased predictions — ml/docs/training-notes.md); `cap` limits the
+    # max:min weight ratio so a sparse decile can't dominate a batch.
+    def sample_weights(self, power: float = 0.5, cap: float = 4.0) -> np.ndarray:
         speeds = self._target
         deciles = np.clip((speeds / (speeds.max() + 1e-6) * 10).astype(int), 0, 9)
         counts = np.bincount(deciles, minlength=10).astype(float)
         counts[counts == 0] = 1.0
-        w = 1.0 / counts[deciles]
-        return w / w.mean()
+        w = (1.0 / counts[deciles]) ** power
+        w = w / w.mean()
+        return np.clip(w, 1.0 / cap, cap)

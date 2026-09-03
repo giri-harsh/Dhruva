@@ -32,9 +32,13 @@ class TrainConfig:
     lr: float = 5e-4
     weight_decay: float = 1e-4
     batch_size: int = 512
-    max_epochs: int = 120
+    max_epochs: int = 40
     warmup_epochs: int = 8            # pure-MSE phase before beta-NLL (probe: NLL-from-scratch is degenerate)
-    patience: int = 15
+    patience: int = 12
+    lr_warmup_epochs: int = 1
+    augment: bool = True             # light BatchAugmenter (rot 3deg + noise, p 0.35)
+    sample_weight_power: float = 0.5  # soften the speed-decile reweighting (1.0 = full, 0 = off)
+    sample_weight_cap: float = 4.0
     lambda_context: float = 0.2
     lambda_yaw: float = 0.2
     seeds: tuple[int, ...] = (0, 1, 2, 3, 4)
@@ -92,22 +96,24 @@ def _run_epoch(model, loader, opt, cfg, train: bool, device, *, use_nll: bool,
 def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: TrainConfig,
                    out_dir: Path, device="cpu") -> dict:
     _seed_everything(seed, cfg.num_threads)
-    aug = BatchAugmenter()
+    aug = BatchAugmenter() if cfg.augment else None
     gen = torch.Generator().manual_seed(seed)
     ds_tr = AnchorWindowDataset(train_seqs, radius_m=radius_m, normalizer=normalizer,
                                 training=True, augmenter=None, seed=seed)
     ds_va = AnchorWindowDataset(val_seqs, radius_m=radius_m, normalizer=normalizer,
                                 training=False, seed=seed)
-    sampler = WeightedRandomSampler(ds_tr.sample_weights().tolist(), len(ds_tr), replacement=True)
+    sw = ds_tr.sample_weights(power=cfg.sample_weight_power, cap=cfg.sample_weight_cap)
+    sampler = WeightedRandomSampler(sw.tolist(), len(ds_tr), replacement=True)
     dl_tr = DataLoader(ds_tr, batch_size=cfg.batch_size, sampler=sampler,
                        num_workers=cfg.num_workers, drop_last=True)
     dl_va = DataLoader(ds_va, batch_size=cfg.batch_size, num_workers=cfg.num_workers)
 
     model = AnchorNet(cfg.model).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    warm = torch.optim.lr_scheduler.LinearLR(opt, start_factor=0.15, total_iters=2)
-    cos = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(cfg.max_epochs - 2, 1))
-    sched = torch.optim.lr_scheduler.SequentialLR(opt, [warm, cos], milestones=[2])
+    lw = max(cfg.lr_warmup_epochs, 1)
+    warm = torch.optim.lr_scheduler.LinearLR(opt, start_factor=0.3, total_iters=lw)
+    cos = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(cfg.max_epochs - lw, 1))
+    sched = torch.optim.lr_scheduler.SequentialLR(opt, [warm, cos], milestones=[lw])
 
     print(f"  seed {seed}: {len(ds_tr)} train / {len(ds_va)} val windows, "
           f"{model.num_parameters()} params, warmup {cfg.warmup_epochs} (MSE) then beta-NLL",

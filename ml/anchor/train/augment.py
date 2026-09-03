@@ -35,11 +35,16 @@ class BatchAugmenter:
     input is already vehicle-frame-aligned, so the rotation models residual
     ALIGNMENT error, not a full arbitrary mount — hence the smaller default angle.
     """
-    rot_max_deg: float = 7.0
+    # A controlled 4-way run (ml/docs/training-notes.md) showed heavy augmentation
+    # slightly HURTS on this already-frame-aligned data (val RMSE 5.47 no-aug vs
+    # 5.68 with the 7-deg version). Kept as a light regulariser only: small
+    # residual-alignment rotation + additive noise, applied to a minority of
+    # batches. Turn up (or off) via TrainConfig for the augmentation ablation row.
+    rot_max_deg: float = 3.0
     noise_std_frac: float = 0.03
-    gain_jitter_frac: float = 0.05
-    bias_walk_frac: float = 0.02
-    p_apply: float = 0.8
+    gain_jitter_frac: float = 0.0
+    bias_walk_frac: float = 0.0
+    p_apply: float = 0.35
 
     def __call__(self, x: torch.Tensor, generator: torch.Generator | None = None) -> torch.Tensor:
         B, T, C = x.shape

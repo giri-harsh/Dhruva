@@ -62,6 +62,28 @@ Result: median label_sigma ≈ 0.21 m/s speed, p95 ≈ 0.49, which matches the
 measured label-vs-VBOX residual (std 0.21 m/s). Labels are trustworthy;
 uncertainty the variance head must explain is almost entirely epistemic.
 
+## Config ablation (1 seed, 28 epochs, val = Vtb)
+
+| config | val speed RMSE | converged | val bias |
+|---|---|---|---|
+| use-only, no aug | 5.61 | ep26 | −0.18 |
+| **use + weak(0.4), no aug** | **5.47** | **ep11** | +0.01 |
+| use-only, aug (7°) | 5.65 | ep26 | −0.26 |
+| use + weak(0.4), aug (7°) | 5.68 | ep11 | +0.23 |
+
+- **`weak`-tier data at 0.4 weight helps** and roughly halves epochs-to-converge
+  (more data beats cleaner data here). Kept.
+- **Heavy augmentation slightly hurts** on already-frame-aligned input — the
+  synthetic rotations don't match a real deployment failure mode. Reduced to a
+  light regulariser (3° rotation + noise, p 0.35); full strength is the
+  augmentation ablation row.
+- The earlier "stuck at 6.5, +2.5 bias" run was the **speed-decile
+  re-weighting** (`WeightedRandomSampler`, PRD §6.6) at full strength distorting
+  the training speed distribution. Softened: `weights ** 0.5`, ratio capped 4:1.
+
+All configs beat predict-the-mean (7.33) by ~25% and the GBR hand-feature
+ceiling (6.21). Headline 5-seed run: `ml/train/runs/week3_headAB/`.
+
 ## Perf note
 
 `torch` default 12 threads oversubscribes this box (conv on tiny [B,40,20]

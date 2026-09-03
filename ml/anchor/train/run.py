@@ -13,8 +13,12 @@ import argparse
 import json
 import os
 import subprocess
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
+
+# torch 2.5 SequentialLR calls child .step(epoch) internally -> noisy deprecation
+warnings.filterwarnings("ignore", message=".*epoch parameter in.*scheduler.step.*")
 
 from ..data.labels import fit_wheel_radius
 from ..data.sync import discover_sequences
