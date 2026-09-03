@@ -1,0 +1,33 @@
+{
+  "contract_version": "1.0.0",
+  "description": "Canonical schema for the replay CSV consumed by the on-device engine's replay harness (S-06) and produced by any synthetic-data generator or IO-VNBD conversion script on the ML side. This file is the ground truth for column names, order, dtype and units. sample_replay.csv is a literal, valid example. validate_replay_csv.py enforces this schema and must pass before a CSV is handed across tracks.",
+  "encoding": "UTF-8, no BOM",
+  "line_ending": "LF only (enforced by .gitattributes)",
+  "delimiter": ",",
+  "decimal_separator": ".",
+  "header_row": true,
+  "columns": [
+    {"name": "timestamp_ms", "dtype": "int64", "unit": "milliseconds since Unix epoch, UTC", "notes": "strictly increasing within a sequence; no two rows share a timestamp"},
+    {"name": "accel_x", "dtype": "float64", "unit": "m/s^2", "notes": "vehicle-frame-aligned if alignment has run, else raw phone-frame"},
+    {"name": "accel_y", "dtype": "float64", "unit": "m/s^2"},
+    {"name": "accel_z", "dtype": "float64", "unit": "m/s^2"},
+    {"name": "gyro_x", "dtype": "float64", "unit": "rad/s", "notes": "NOT deg/s — see contracts/units.md"},
+    {"name": "gyro_y", "dtype": "float64", "unit": "rad/s"},
+    {"name": "gyro_z", "dtype": "float64", "unit": "rad/s"},
+    {"name": "mag_x", "dtype": "float64", "unit": "microtesla"},
+    {"name": "mag_y", "dtype": "float64", "unit": "microtesla"},
+    {"name": "mag_z", "dtype": "float64", "unit": "microtesla"},
+    {"name": "gnss_valid", "dtype": "int64", "unit": "0 or 1", "notes": "1 iff this row carries a real GNSS fix; when 0 the four gnss_* fields below MUST be empty, not 0.0 — zero is a valid latitude and must never be used as a missing-value sentinel"},
+    {"name": "gnss_lat", "dtype": "float64 or empty", "unit": "decimal degrees, WGS84"},
+    {"name": "gnss_lon", "dtype": "float64 or empty", "unit": "decimal degrees, WGS84"},
+    {"name": "gnss_speed_mps", "dtype": "float64 or empty", "unit": "m/s"},
+    {"name": "gnss_course_deg", "dtype": "float64 or empty", "unit": "degrees, 0-360, clockwise from true north"}
+  ],
+  "missing_value_representation": "empty string between commas, e.g. `,,` — never 0, never NaN, never the string \"null\" or \"NA\"",
+  "known_failure_modes_this_schema_prevents": [
+    "Excel re-saving a CSV on a device with a non-US regional format silently swaps the decimal separator to a comma, which is a delimiter collision with a comma-delimited file. Never open/re-save these files in Excel; edit with a script or a plain text editor only.",
+    "Windows text editors defaulting to CRLF line endings, which some CSV parsers (including naive Kotlin BufferedReader splits) will include as a trailing \\r in the last field of every row. .gitattributes forces LF on checkout; validate_replay_csv.py checks for stray \\r bytes.",
+    "gyro in deg/s instead of rad/s is the single most common unit bug in this whole project (factor of ~57x) and produces a filter that silently diverges rather than crashing. Every producer of this file must assert on gyro magnitude sanity (see contracts/units.md).",
+    "Using 0.0 instead of an empty field for a missing GNSS fix — 0,0 is a valid coordinate (off the coast of West Africa) and will silently corrupt map matching instead of erroring."
+  ]
+}

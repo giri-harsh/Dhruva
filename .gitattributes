@@ -1,0 +1,21 @@
+# Force LF everywhere, even on Windows checkouts. Both of you are on
+# Windows — without this, git's autocrlf default can silently convert
+# LF to CRLF on checkout, which validate_replay_csv.py will then reject
+# (see contracts/replay_csv/schema.json known_failure_modes) and which
+# can also make a "no-op" file show as fully changed in git diff/PR review.
+* text=auto eol=lf
+
+*.csv       text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.py        text eol=lf
+*.kt        text eol=lf
+*.kts       text eol=lf
+
+# Binary — never diff, never line-ending-convert
+*.onnx      binary
+*.tflite    binary
+*.pbf       binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary

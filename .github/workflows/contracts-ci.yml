@@ -1,0 +1,91 @@
+name: contracts-ci
+
+# Runs on every push and PR. This is the automated version of "does my
+# change break the other person's side" — it must pass before a PR into
+# main is merged (set this as a required status check in branch
+# protection: Settings -> Branches -> Branch protection rules -> main).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  model-io-contract:
+    runs-on: windows-latest   # match the dev machines (both on Windows)
+    defaults:
+      run:
+        working-directory: contracts/model_io
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pytest
+      - name: Regenerate stub model and manifest
+        run: python generate_stub_model.py
+      - name: Fail if regeneration produced an uncommitted diff
+        shell: bash
+        run: |
+          git diff --exit-code -- . || {
+            echo "::error::anchor_net_stub.onnx / model_manifest.json / golden_vectors are stale."
+            echo "::error::Run generate_stub_model.py and commit the results."
+            exit 1
+          }
+      - name: Golden vector + manifest self-consistency tests
+        run: pytest test_contract.py -v
+
+  replay-csv-contract:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: contracts/replay_csv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pandas
+      - name: Regenerate sample CSV
+        run: python make_sample_csv.py
+      - name: Fail if regeneration produced an uncommitted diff
+        shell: bash
+        run: git diff --exit-code -- sample_replay.csv
+      - name: Validate sample CSV against schema
+        run: python validate_replay_csv.py sample_replay.csv
+
+  backend-api-contract:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: contracts/backend_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Regenerate openapi.json
+        run: python stub_api.py
+      - name: Fail if the API contract changed without being committed
+        shell: bash
+        run: |
+          git diff --exit-code -- openapi.json || {
+            echo "::error::openapi.json is stale relative to stub_api.py."
+            echo "::error::This means an endpoint's request/response shape changed."
+            echo "::error::Bump API_CONTRACT_VERSION per VERSIONING.md, message the other track, then commit."
+            exit 1
+          }
+
+  # Placeholder — wire this up once the Android module exists. It should:
+  #   1. Load contracts/model_io/anchor_net_stub.onnx via ONNX Runtime Mobile
+  #   2. Run each contracts/model_io/golden_vectors/*.json input through it
+  #   3. Assert the output matches expected_output within tolerance_abs
+  #   4. Parse contracts/replay_csv/sample_replay.csv with the app's own
+  #      CSV reader and assert row/column counts and a few spot values
+  # android-contract-check:
+  #   runs-on: windows-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Instrumented contract test
+  #       run: ./gradlew :app:connectedContractCheckDebugAndroidTest

@@ -1,0 +1,70 @@
+{
+  "contract_version": "1.0.0",
+  "model_file": "anchor_net_stub.onnx",
+  "model_sha256": "e2245c39988e3b94797cc48da2a49361b2b979af2f35401bb3af967500dee658",
+  "onnx_opset": 17,
+  "window_size_samples": 20,
+  "sample_rate_hz": 10,
+  "input_name": "imu_window",
+  "input_shape": [
+    1,
+    20,
+    6
+  ],
+  "feature_order": [
+    "accel_x",
+    "accel_y",
+    "accel_z",
+    "gyro_x",
+    "gyro_y",
+    "gyro_z"
+  ],
+  "feature_units": {
+    "accel_x": "m/s^2",
+    "accel_y": "m/s^2",
+    "accel_z": "m/s^2",
+    "gyro_x": "rad/s",
+    "gyro_y": "rad/s",
+    "gyro_z": "rad/s"
+  },
+  "normalization": {
+    "applied_by": "caller, before inference",
+    "formula": "(raw - mean) / std, per-feature",
+    "mean": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "std": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "outputs": {
+    "velocity_mean_mps": {
+      "shape": [
+        1,
+        1
+      ],
+      "unit": "m/s",
+      "meaning": "predicted forward speed for this window"
+    },
+    "velocity_log_variance": {
+      "shape": [
+        1,
+        1
+      ],
+      "unit": "log((m/s)^2)",
+      "meaning": "natural-log of predicted variance; consumer computes variance = exp(this) and MUST NOT treat this value as variance or std directly"
+    }
+  },
+  "golden_vectors_dir": "golden_vectors/",
+  "compatibility_rule": "The Android app declares MIN_SUPPORTED_CONTRACT_VERSION. If a downloaded model's contract_version (read from this manifest, or from the ONNX metadata_props embedded in the file itself) is not semver-compatible, the app MUST refuse to load it and fall back per FR-24 (model-failure fallback), never attempt to run it anyway."
+}

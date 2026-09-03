@@ -1,0 +1,386 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ANCHOR Backend API (stub)",
+    "description": "Stub implementation used to freeze the wire contract before the real backend exists. Every endpoint returns deterministic canned data. Swap implementations, keep the schemas, and this contract never breaks the Android client that was written against it.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/map/extract": {
+      "get": {
+        "summary": "Map Extract",
+        "operationId": "map_extract_v1_map_extract_get",
+        "parameters": [
+          {
+            "name": "region",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MapRegion"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapExtractResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/model/version": {
+      "get": {
+        "summary": "Model Version",
+        "operationId": "model_version_v1_model_version_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelVersionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/telemetry/labels": {
+      "post": {
+        "summary": "Upload Labels",
+        "operationId": "upload_labels_v1_telemetry_labels_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelUploadResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "apiContractVersion": {
+            "type": "string",
+            "title": "Apicontractversion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "apiContractVersion"
+        ],
+        "title": "HealthResponse"
+      },
+      "LabelPair": {
+        "properties": {
+          "imuWindow": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Imuwindow"
+          },
+          "displacementM": {
+            "type": "number",
+            "title": "Displacementm"
+          },
+          "windowDurationS": {
+            "type": "number",
+            "title": "Windowdurations"
+          },
+          "deviceModel": {
+            "type": "string",
+            "title": "Devicemodel"
+          },
+          "appVersion": {
+            "type": "string",
+            "title": "Appversion"
+          },
+          "contractVersion": {
+            "type": "string",
+            "title": "Contractversion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imuWindow",
+          "displacementM",
+          "windowDurationS",
+          "deviceModel",
+          "appVersion",
+          "contractVersion"
+        ],
+        "title": "LabelPair",
+        "description": "One (IMU window -> GNSS-derived displacement) training pair.\nPosition-stripped by construction: no lat/lon field exists in this\nmodel at all, by design, not by omission at serialization time."
+      },
+      "LabelUploadRequest": {
+        "properties": {
+          "deviceIdHash": {
+            "type": "string",
+            "title": "Deviceidhash"
+          },
+          "pairs": {
+            "items": {
+              "$ref": "#/components/schemas/LabelPair"
+            },
+            "type": "array",
+            "title": "Pairs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deviceIdHash",
+          "pairs"
+        ],
+        "title": "LabelUploadRequest"
+      },
+      "LabelUploadResponse": {
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "rejected": {
+            "type": "integer",
+            "title": "Rejected"
+          },
+          "rejectionReasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rejectionreasons"
+          },
+          "batchId": {
+            "type": "string",
+            "title": "Batchid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "rejected",
+          "rejectionReasons",
+          "batchId"
+        ],
+        "title": "LabelUploadResponse"
+      },
+      "MapExtractResponse": {
+        "properties": {
+          "region": {
+            "$ref": "#/components/schemas/MapRegion"
+          },
+          "mapVersion": {
+            "type": "string",
+            "title": "Mapversion"
+          },
+          "downloadUrl": {
+            "type": "string",
+            "title": "Downloadurl"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "title": "Sizebytes"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "region",
+          "mapVersion",
+          "downloadUrl",
+          "sha256",
+          "sizeBytes",
+          "updatedAt"
+        ],
+        "title": "MapExtractResponse"
+      },
+      "MapRegion": {
+        "type": "string",
+        "enum": [
+          "delhi_ncr",
+          "hill_corridor",
+          "uk_metrics"
+        ],
+        "title": "MapRegion",
+        "description": "Fixed, closed enum \u2014 not a free-text string. Adding a region is a\ncontract change (bump API_CONTRACT_VERSION), not just a new string\neither side starts sending."
+      },
+      "ModelVersionResponse": {
+        "properties": {
+          "modelVersion": {
+            "type": "string",
+            "title": "Modelversion"
+          },
+          "contractVersion": {
+            "type": "string",
+            "title": "Contractversion"
+          },
+          "minSupportedContractVersion": {
+            "type": "string",
+            "title": "Minsupportedcontractversion"
+          },
+          "downloadUrl": {
+            "type": "string",
+            "title": "Downloadurl"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "title": "Sizebytes"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Publishedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "modelVersion",
+          "contractVersion",
+          "minSupportedContractVersion",
+          "downloadUrl",
+          "sha256",
+          "sizeBytes",
+          "publishedAt"
+        ],
+        "title": "ModelVersionResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

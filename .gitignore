@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Android / Gradle
+.gradle/
+/build/
+*/build/
+local.properties
+.idea/
+*.iml
+captures/
+.cxx/
+
+# Large training artifacts that are NOT the committed contract stub —
+# real trained weights and checkpoints live outside git, published
+# through the backend's model registry (GET /v1/model/version), not
+# committed to the repo. Only the small stub in contracts/model_io/
+# is ever committed as an .onnx file.
+*.ckpt
+*.pt
+checkpoints/
+runs/
+wandb/
+
+# Big raw datasets — IO-VNBD extracted CSVs, OSM .osm.pbf extracts
+data/raw/
+*.osm.pbf
+
+# OS noise
+.DS_Store
+Thumbs.db
