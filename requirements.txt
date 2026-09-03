@@ -32,6 +32,7 @@ matplotlib==3.11.1
 
 # --- test / tooling ---
 pytest==9.1.1
+httpx==0.28.1          # fastapi TestClient (backend/tests)
 
 # --- transitive (pinned for byte-identical envs) ---
 annotated-doc==0.0.5
@@ -76,3 +77,5 @@ typing-inspection==0.4.4
 tzdata==2026.3
 watchfiles==1.2.0
 websockets==17.1
+certifi==2026.7.22
+httpcore==1.0.9

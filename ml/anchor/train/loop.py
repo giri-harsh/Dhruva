@@ -94,6 +94,8 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=cfg.max_epochs)
 
+    print(f"  seed {seed}: {len(ds_tr)} train / {len(ds_va)} val windows, "
+          f"{model.num_parameters()} params", flush=True)
     best = {"val_nll": float("inf"), "epoch": -1, "state": None}
     history = []
     for epoch in range(cfg.max_epochs):
@@ -101,11 +103,17 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
         tr = _run_epoch(model, dl_tr, opt, cfg, True, device)
         va = _run_epoch(model, dl_va, opt, cfg, False, device)
         sched.step()
-        history.append({"epoch": epoch, "train": tr, "val": va, "s": round(time.time() - t0, 1)})
-        if va["nll"] < best["val_nll"] - 1e-4:
+        dt = round(time.time() - t0, 1)
+        history.append({"epoch": epoch, "train": tr, "val": va, "s": dt})
+        improved = va["nll"] < best["val_nll"] - 1e-4
+        if improved:
             best = {"val_nll": va["nll"], "epoch": epoch,
                     "state": {k: v.cpu().clone() for k, v in model.state_dict().items()}}
-        elif epoch - best["epoch"] >= cfg.patience:
+        print(f"  seed {seed} e{epoch:03d} {dt:5.1f}s  "
+              f"train_nll={tr['nll']:.4f} val_nll={va['nll']:.4f} "
+              f"val_rmse={va['rmse']:.3f} sigma={va['sigma']:.3f}"
+              f"{'  *' if improved else ''}", flush=True)
+        if not improved and epoch - best["epoch"] >= cfg.patience:
             break
 
     out_dir.mkdir(parents=True, exist_ok=True)
