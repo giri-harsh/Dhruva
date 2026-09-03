@@ -79,9 +79,7 @@ class _DilatedBlock(nn.Module):
         self.drop = nn.Dropout(dropout)
 
     def forward(self, x):                    # x: [B, C, T]
-        y = self.conv(x)
-        if y.shape[-1] != x.shape[-1]:
-            y = y[..., : x.shape[-1]]
+        y = self.conv(x)                     # symmetric padding preserves T
         y = self.drop(F.relu(self.norm(y)))
         return x + y                         # residual
 

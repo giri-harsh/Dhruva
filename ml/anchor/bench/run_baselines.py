@@ -21,6 +21,7 @@ import numpy as np
 
 from ..contract import CONTRACT_VERSION
 from ..data.sync import discover_sequences
+from ..eval.anchornet_dr import AnchorNetDeadReckoner
 from ..eval.metrics import aggregate, score_outage
 from ..eval.outages import sample_outages
 from ..splits.protocol import assign_all
@@ -53,7 +54,8 @@ def _provenance(split: str, seed: int, seqs) -> dict:
     }
 
 
-def run(split: str, seed: int, iovnbd_root: str, out_path: Path) -> dict:
+def run(split: str, seed: int, iovnbd_root: str, out_path: Path,
+        anchornet_run: str | None = None) -> dict:
     all_seqs = discover_sequences(iovnbd_root)
     seqs = assign_all(all_seqs)[split]
     if not seqs:
@@ -61,8 +63,19 @@ def run(split: str, seed: int, iovnbd_root: str, out_path: Path) -> dict:
     outages = sample_outages(seqs, seed=seed)
     by_id = {s.seq_id: s for s in seqs}
 
+    entries = list(ALL_BASELINES)
+    if anchornet_run:
+        rd = Path(anchornet_run)
+        ckpts = sorted(rd.glob("anchornet_seed*.pt"))
+        if not ckpts:
+            raise SystemExit(f"no anchornet_seed*.pt in {rd}")
+        entries.append(AnchorNetDeadReckoner(
+            checkpoint_path=str(ckpts[0]),
+            normalizer_path=str(_ROOT / "ml" / "splits" / "normalizer_train.json"),
+        ))
+
     results: dict[str, dict] = {}
-    for bl in ALL_BASELINES:
+    for bl in entries:
         if not bl.runnable:
             results[bl.id] = {"name": bl.name, "status": "cited-only"}
             continue
@@ -80,6 +93,8 @@ def run(split: str, seed: int, iovnbd_root: str, out_path: Path) -> dict:
         results[bl.id] = {
             "name": bl.name,
             "status": "ok",
+            **({"fr24_rejected_windows": bl.rejected_windows}
+               if hasattr(bl, "rejected_windows") else {}),
             "aggregate": aggregate(scores),
             "per_outage": [s.as_dict() for s in scores],
         }
@@ -99,10 +114,12 @@ def main() -> None:
     ap.add_argument("--split", default="test_id")
     ap.add_argument("--seed", type=int, default=20260903)
     ap.add_argument("--iovnbd-root", default=_DEFAULT_IOVNBD)
+    ap.add_argument("--anchornet-run", default=None,
+                    help="a ml/train/runs/<name> dir — adds the ANCHOR-Net DR row")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
     out = Path(args.out) if args.out else _OUT_DIR / f"baselines_{args.split}_{args.seed}.json"
-    doc = run(args.split, args.seed, args.iovnbd_root, out)
+    doc = run(args.split, args.seed, args.iovnbd_root, out, args.anchornet_run)
     print(f"wrote {out}  ({doc['n_outages']} outages)")
     for bid, r in doc["baselines"].items():
         if r["status"] != "ok":

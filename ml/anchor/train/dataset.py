@@ -61,15 +61,22 @@ class AnchorWindowDataset(Dataset):
 
         win = SequenceWindower(training=training)
         self.feats: dict[str, np.ndarray] = {}
-        self.labellers: dict[str, SequenceLabeller] = {}
         self.index: list[tuple[str, int, int]] = []
+        self._target = []          # mean speed per window (precomputed once)
+        self._sigma = []           # label sigma on SPEED per window (precomputed once)
+        win_dur_s = WINDOW_SIZE_SAMPLES / SAMPLE_RATE_HZ
         for seq in sequences:
             if seq.meta.get("usability") == "drop":
                 continue
             self.feats[seq.seq_id] = aligned_features(seq)
-            self.labellers[seq.seq_id] = SequenceLabeller(seq, radius_m)
+            lab = SequenceLabeller(seq, radius_m)
             for w in win.windows(seq):
+                wl = lab.label(w.start, w.stop)
                 self.index.append((seq.seq_id, w.start, w.stop))
+                self._target.append(wl.mean_speed_mps)
+                self._sigma.append(wl.label_sigma_m / win_dur_s)
+        self._target = np.asarray(self._target, dtype=np.float32)
+        self._sigma = np.asarray(self._sigma, dtype=np.float32)
 
     def __len__(self) -> int:
         return len(self.index)
@@ -82,20 +89,17 @@ class AnchorWindowDataset(Dataset):
         if self.aug is not None:
             window = self.aug(window, self._rng)
 
-        lab = self.labellers[seq_id].label(a, b)
         x = self.norm.transform(window[None])[0]             # [20, 6] normalised
         return {
             "x": torch.from_numpy(np.ascontiguousarray(x, dtype=np.float32)),
-            "target_speed": torch.tensor(lab.mean_speed_mps, dtype=torch.float32),
-            "label_sigma": torch.tensor(lab.label_sigma_m / (WINDOW_SIZE_SAMPLES / SAMPLE_RATE_HZ),
-                                        dtype=torch.float32),  # sigma on SPEED, not displacement
+            "target_speed": torch.tensor(self._target[i], dtype=torch.float32),
+            "label_sigma": torch.tensor(self._sigma[i], dtype=torch.float32),
             "seq_id": seq_id,
         }
 
     # speed-decile re-weighting sampler weights (PRD §6.6 class balance)
     def sample_weights(self) -> np.ndarray:
-        speeds = np.array([self.labellers[s].label(a, b).mean_speed_mps
-                           for s, a, b in self.index])
+        speeds = self._target
         deciles = np.clip((speeds / (speeds.max() + 1e-6) * 10).astype(int), 0, 9)
         counts = np.bincount(deciles, minlength=10).astype(float)
         counts[counts == 0] = 1.0
