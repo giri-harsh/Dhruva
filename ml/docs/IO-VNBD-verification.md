@@ -193,3 +193,54 @@ but fit per-sequence too and check drift (tyre pressure/temperature).
    so the field name stays honest and no `contract_version` MAJOR bump is needed —
    the filter multiplies by dt itself. Final call pending Kamal sync; recorded in
    `contracts/VERSIONING.md` compatibility notes when settled.
+
+---
+
+## 8. Phone-mount quality — the second data risk, measured (added 2026-09-03)
+
+After building the loader and scoring all 72 synchronised sequences
+(`ml/anchor/data/quality.py`, committed as `sequence_index.json`), a second
+limitation surfaced that R-02 only half-anticipated:
+
+**The phone in IO-VNBD's synchronised drives is mounted inconsistently, and in
+many sequences its IMU carries almost no vehicle-motion information.**
+
+Time alignment is fine — phone-GPS-speed vs vehicle-speed correlates 0.7–1.0 at
+zero lag for 65 of 72 sequences. The problem is signal, not sync:
+
+| Signal (zero-lag, 10 Hz) | S1 (Driver A) | typical Driver E | Y1 (Driver D) |
+|---|---|---|---|
+| `corr(rolling-std\|phone accel\|, veh speed)` — the thesis signal | 0.53 | 0.0–0.4 | 0.03 |
+| `R²(veh yaw rate ~ 3 phone gyro axes)` — mount rigidity | 0.89 | ~0.1 | 0.00 |
+
+Usability tiers (`quality.py`): **use** = vib↔speed ≥ 0.35 or yaw-R² ≥ 0.5;
+**weak** = ≥ 0.20 / 0.30; **drop** otherwise or vehicle basically parked.
+
+| Tier | Sequences | Hours | By driver |
+|---|---|---|---|
+| **use** | 32 | **13.9 h** | A 3.2, B 2.9, E 7.9 |
+| weak | 11 | 5.4 h | A 2.6, E 2.8 |
+| drop | 29 | 10.4 h | A 2.8, **D 2.0 (all of Driver D)**, E 5.6 |
+
+### Consequences — decisions this drives
+
+1. **The clean supervised pool is ~14 h (use) / ~19 h (use+weak), ~80 % Driver E.**
+   Not "too small to train" but not driver-diverse and not large.
+2. **Driver D is unusable** (Y1's phone stream looks decoupled from the vehicle).
+   Held-out-driver evaluation now rests on **Driver A only** (~3 h clean / ~6 h
+   total). Driver B is a single long drive. This is a real limit on what a
+   generalisation claim can say — stated in `ml/splits/README.md`.
+3. **The two-stage plan (§6.6) is promoted from fallback to primary architecture:**
+   pre-train on the ~58 h *unsynchronised* smartphone data with GNSS-derived
+   speed as a weak 1 Hz label, then fine-tune on the ~14 h clean synchronised
+   data with wheel-speed labels. This is not the R-01 "sync subset too small"
+   trigger firing — it's R-02 (mount inconsistency) making the weakly-supervised
+   pre-train necessary for the model to see enough varied phone behaviour.
+4. **`usability` and the per-sequence quality scores feed `label_sigma_m`** — a
+   window from a `weak` sequence trains the variance head against a wider label
+   uncertainty, which is correct: we genuinely know its displacement label less
+   well.
+5. My quick correlation metric is a floor, not a ceiling — the TCN's learned
+   filters and real spectral features will extract signal a 1 s rolling-std
+   misses. `weak` sequences get re-evaluated once the model exists; the tiers
+   are advisory metadata in the split manifest, not a hard delete.
