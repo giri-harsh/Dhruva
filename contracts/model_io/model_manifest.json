@@ -1,7 +1,7 @@
 {
   "contract_version": "1.0.0",
   "model_file": "anchor_net_stub.onnx",
-  "model_sha256": "e2245c39988e3b94797cc48da2a49361b2b979af2f35401bb3af967500dee658",
+  "model_sha256": "163f2dd0e489dd943dc631e5912f25ea4aae0c18373dee507f93b230945972d8",
   "onnx_opset": 17,
   "window_size_samples": 20,
   "sample_rate_hz": 10,

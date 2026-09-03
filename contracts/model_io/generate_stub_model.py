@@ -46,9 +46,18 @@ SAMPLE_RATE_HZ = 10
 
 # Order matters. This exact order, these exact names. Nothing is inferred
 # from column position anywhere downstream — both sides read this list.
+#
+# GRAVITY / FRAME, READ THIS: accel_x/y/z here is LINEAR acceleration
+# (gravity REMOVED: linear = raw_accel - gravity_channel) in VEHICLE frame
+# (ISO 8855-style: x=forward, y=left, z=up), NOT the raw phone-frame,
+# gravity-inclusive signal you get straight off a sensor or out of
+# contracts/replay_csv/sample_replay.csv. At rest, accel_z here is ~0, not
+# ~9.8. Full pipeline (raw log -> this tensor) and the exact rotation math
+# are frozen in ../frame_convention.md — read it before wiring up either
+# a training input pipeline or an on-device inference/replay path.
 FEATURE_ORDER = [
-    "accel_x", "accel_y", "accel_z",   # m/s^2, vehicle-frame-aligned
-    "gyro_x", "gyro_y", "gyro_z",      # rad/s, vehicle-frame-aligned
+    "accel_x", "accel_y", "accel_z",   # m/s^2, vehicle-frame, GRAVITY REMOVED (linear accel)
+    "gyro_x", "gyro_y", "gyro_z",      # rad/s, vehicle-frame
 ]
 NUM_FEATURES = len(FEATURE_ORDER)
 
@@ -137,6 +146,7 @@ def build_model() -> onnx.ModelProto:
         "output_mean_name": OUTPUT_MEAN_NAME,
         "output_logvar_name": OUTPUT_LOGVAR_NAME,
         "output_semantics": "mean=m/s, logvar=natural-log(variance); do variance=exp(logvar)",
+        "input_frame_convention": "vehicle-frame (x=fwd,y=left,z=up), gravity REMOVED (linear accel) — NOT raw phone-frame gravity-inclusive; see ../frame_convention.md",
         "norm_mean": ",".join(str(x) for x in NORM_MEAN),
         "norm_std": ",".join(str(x) for x in NORM_STD),
     }

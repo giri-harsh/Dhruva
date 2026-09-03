@@ -1,6 +1,6 @@
 {
   "contract_version": "1.0.0",
-  "description": "Canonical schema for the replay CSV consumed by the on-device engine's replay harness (S-06) and produced by any synthetic-data generator or IO-VNBD conversion script on the ML side. This file is the ground truth for column names, order, dtype and units. sample_replay.csv is a literal, valid example. validate_replay_csv.py enforces this schema and must pass before a CSV is handed across tracks.",
+  "description": "Canonical schema for the replay CSV consumed by the on-device engine's replay harness (S-06) and produced by any synthetic-data generator or IO-VNBD conversion script on the ML side. This file is the ground truth for column names, order, dtype and units. sample_replay.csv is a literal, valid example. validate_replay_csv.py enforces this schema and must pass before a CSV is handed across tracks. IMPORTANT: this is a RAW sensor log — accel is gravity-INCLUSIVE (accel_z ~9.8 at rest) and frame is phone-frame unless already aligned. This is NOT the model's input tensor. The model's contracts/model_io/ input is gravity-removed, vehicle-frame linear acceleration. The conversion between the two is a required preprocessing step, frozen in ../frame_convention.md — read it before assuming this CSV can be windowed straight into the model.",
   "encoding": "UTF-8, no BOM",
   "line_ending": "LF only (enforced by .gitattributes)",
   "delimiter": ",",
@@ -8,9 +8,9 @@
   "header_row": true,
   "columns": [
     {"name": "timestamp_ms", "dtype": "int64", "unit": "milliseconds since Unix epoch, UTC", "notes": "strictly increasing within a sequence; no two rows share a timestamp"},
-    {"name": "accel_x", "dtype": "float64", "unit": "m/s^2", "notes": "vehicle-frame-aligned if alignment has run, else raw phone-frame"},
-    {"name": "accel_y", "dtype": "float64", "unit": "m/s^2"},
-    {"name": "accel_z", "dtype": "float64", "unit": "m/s^2"},
+    {"name": "accel_x", "dtype": "float64", "unit": "m/s^2", "notes": "RAW, gravity-INCLUSIVE. Vehicle-frame-aligned only if this specific file was produced by an alignment step (no such marker exists in this schema yet — treat as phone-frame unless the producer states otherwise). See ../frame_convention.md."},
+    {"name": "accel_y", "dtype": "float64", "unit": "m/s^2", "notes": "RAW, gravity-inclusive — see accel_x notes"},
+    {"name": "accel_z", "dtype": "float64", "unit": "m/s^2", "notes": "RAW, gravity-inclusive — expect ~+/-9.8 at rest, this is NORMAL and expected for this file, not a bug. The model input's accel_z is a different, gravity-removed quantity — see ../frame_convention.md."},
     {"name": "gyro_x", "dtype": "float64", "unit": "rad/s", "notes": "NOT deg/s — see contracts/units.md"},
     {"name": "gyro_y", "dtype": "float64", "unit": "rad/s"},
     {"name": "gyro_z", "dtype": "float64", "unit": "rad/s"},

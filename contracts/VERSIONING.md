@@ -50,3 +50,29 @@ app release, and an app release does not require a new model:
 | App version | Min model contract | Min API contract | Notes |
 |---|---|---|---|
 | 0.1.0 (initial) | 1.0.0 | 1.0.0 | stub artifacts in this repo |
+
+## Resolved cross-track questions (Week 1)
+
+Recorded here so a resolved ambiguity never has to be re-asked or re-argued
+— if either track's code disagrees with a line below, the code is wrong,
+not this file.
+
+- **`velocity_mean_mps` semantics (model_io v1.0.0):** it is mean *forward
+  speed* over the window, in m/s — **not** displacement. This was already
+  the documented contract (`model_manifest.json` / ONNX `metadata_props`
+  `output_semantics`), confirmed here as the final answer, no contract
+  change. If you need displacement for a given window, compute it as
+  `displacement_m = velocity_mean_mps * WINDOW_DURATION_S` where
+  `WINDOW_DURATION_S = WINDOW_SIZE_SAMPLES / SAMPLE_RATE_HZ = 2.0 s`
+  (this derivation already lives in `ml/anchor/contract.py`). Do not treat
+  the model's raw output as a displacement value directly.
+- **Accelerometer gravity/frame convention (model_io v1.0.0):** the
+  model's `accel_x/y/z` input is gravity-**removed** linear acceleration
+  in **vehicle frame** (x=forward, y=left, z=up), not raw/gravity-inclusive
+  phone-frame data. `contracts/replay_csv/sample_replay.csv` is
+  intentionally raw and gravity-inclusive (it's a sensor-log fixture, not
+  a model-input fixture) — the two were never in conflict, but the
+  pipeline between them was undocumented until now. Full detail, exact
+  rotation math, and who implements what: see `../frame_convention.md`.
+  No contract version change — this documents an already-implemented
+  behavior (`ml/anchor/data/features.py`), it doesn't change one.
