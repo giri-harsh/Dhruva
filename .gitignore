@@ -39,3 +39,6 @@ maps/_build/
 # OS noise
 .DS_Store
 Thumbs.db
+
+# bench results are regenerable + timestamped — curated snapshots committed explicitly
+ml/bench/results/

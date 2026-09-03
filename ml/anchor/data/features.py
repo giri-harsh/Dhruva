@@ -3,11 +3,16 @@
 This is the training-time equivalent of Kamal's on-device AlignmentService
 (v3 PRD FR-04/FR-05). The exported model's contract input is exactly
 `accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z` (contracts/model_io §2.2),
-vehicle-frame, in the ISO-8855-style frame proposed in
+vehicle-frame, in the ISO-8855-style frame FROZEN in
 `contracts/frame_convention.md`:  x = forward, y = left, z = up, right-handed.
 `accel_*` here is LINEAR acceleration (gravity removed) — the phone ships a
-`GRAVITY` channel, so `linear = accel - gravity`, and vehicle-frame `accel_z`
-is then suspension/road motion, not a ~9.8 offset.
+`GRAVITY` channel, so `linear = accel - gravity` (subtracted BEFORE rotation),
+and vehicle-frame `accel_z` is then suspension/road motion, not a ~9.8 offset.
+
+This module IS the reference implementation named by `frame_convention.md` — a
+Kotlin port must reproduce its arithmetic exactly. Changing the gravity source,
+the yaw-search method, or the rotation order here is a `model_io` MAJOR bump
+(VERSIONING.md) once real weights ship, and needs a heads-up to Kamal first.
 
 --- v0 alignment (per-sequence static mount) ---
 1. roll & pitch: the mean phone GRAVITY vector points "down"; rotate so it
@@ -22,8 +27,9 @@ Limitations (documented, not hidden): assumes a rigid mount for the whole
 sequence; a loose phone breaks assumption 1. Sequences where step 2's best
 correlation is weak are exactly the `quality.usability != "use"` ones. Per-window
 mount variation and remounts are covered by SO(3) augmentation at train time
-(PRD §6.4), not here. This will be refined once Kamal's AlignmentService
-convention is locked (open decision #1).
+(PRD §6.4), not here. The axis convention is locked (frame_convention.md); what
+may still be tuned is the alignment *fit* (yaw-search resolution, gravity
+smoothing) — that's an algorithm change, version-governed once weights ship.
 """
 from __future__ import annotations
 
