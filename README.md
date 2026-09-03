@@ -37,3 +37,23 @@ they're building against.
 `.github/workflows/contracts-ci.yml` regenerates every one of these on
 every push and fails the build if the committed output doesn't match —
 so a contract can't silently drift from its generator.
+
+## ML + backend track (Harshit) — local setup
+
+Python **3.11.x only** (see `TOOLCHAIN.md`). From the repo root:
+
+```
+uv venv .venv --python 3.11
+.venv\Scripts\activate
+uv pip install -r requirements.txt
+```
+
+`torch` is the **CPU** wheel — neither dev machine has an NVIDIA GPU. Exact line:
+
+```
+uv pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+```
+
+`requirements.txt` is a full `==` lockfile. Track code lives in `ml/` (training/eval
+library, no HTTP) and `backend/` (FastAPI service). See `ml/README.md`.
+IO-VNBD dataset handling and Day-1 findings: `ml/docs/IO-VNBD-verification.md`.

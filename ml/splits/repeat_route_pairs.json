@@ -1,0 +1,25 @@
+{
+  "purpose": "Kamal's magnetic route memory (FR-30) needs held-out sequence pairs that traverse the same road. IO-VNBD's SYNCHRONISED set has no clean 'same route driven twice' pair; the entries below are the best available: long drives that share a road CORRIDOR. All listed sequences are in a held-out split (never train), so the velocity model has not seen the geometry.",
+  "grid_cell_m": 500,
+  "pairs": [
+    {
+      "a": "vfa02",
+      "b": "vtb05",
+      "shared_cells_approx": 147,
+      "note": "both Driver E; overlapping northbound motorway corridor (~70 km of shared 500 m cells). vfa02 -> test_repeat_corridor, vtb05 -> test_repeat_corridor."
+    }
+  ],
+  "corridor_groups": [
+    {
+      "seq_ids": [
+        "m",
+        "s1",
+        "s2",
+        "s4",
+        "y1"
+      ],
+      "note": "Coventry-area urban road network, shared by Drivers A/B/D. Overlap is diffuse (20-46 shared cells per pair), not a single repeated route. m -> train; s1/s2/s4 -> test_ood_driver; y1 -> excluded. Use for cross-driver magnetic tests only with that caveat."
+    }
+  ],
+  "recommendation": "For a proper route-repeat magnetic test, pull the UNSYNCHRONISED Vw/Vta families (not in this checkout) and look for same-day repeated passes there."
+}
