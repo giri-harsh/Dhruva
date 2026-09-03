@@ -24,8 +24,56 @@ def _rand_rotation(rng: np.random.Generator, max_angle_rad: float) -> np.ndarray
     return np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * (K @ K)
 
 
+import torch
+
+
+@dataclass
+class BatchAugmenter:
+    """Vectorised augmentation applied to a whole [B, T, 6] tensor batch inside
+    the training loop (far faster than per-window in a num_workers=0 DataLoader,
+    which was ~40 s/epoch of the total). Operates on NORMALISED windows; the
+    input is already vehicle-frame-aligned, so the rotation models residual
+    ALIGNMENT error, not a full arbitrary mount — hence the smaller default angle.
+    """
+    rot_max_deg: float = 7.0
+    noise_std_frac: float = 0.03
+    gain_jitter_frac: float = 0.05
+    bias_walk_frac: float = 0.02
+    p_apply: float = 0.8
+
+    def __call__(self, x: torch.Tensor, generator: torch.Generator | None = None) -> torch.Tensor:
+        B, T, C = x.shape
+        dev = x.device
+        g = generator
+        apply = torch.rand(B, generator=g, device=dev) < self.p_apply
+
+        # small-angle SO(3) per sample: R ≈ I + [w]x for w ~ U(-a, a)^3
+        a = torch.deg2rad(torch.tensor(self.rot_max_deg))
+        w = (torch.rand(B, 3, generator=g, device=dev) * 2 - 1) * a
+        zero = torch.zeros(B, device=dev)
+        R = torch.stack([
+            torch.stack([torch.ones(B, device=dev), -w[:, 2], w[:, 1]], -1),
+            torch.stack([w[:, 2], torch.ones(B, device=dev), -w[:, 0]], -1),
+            torch.stack([-w[:, 1], w[:, 0], torch.ones(B, device=dev)], -1),
+        ], -2)  # [B,3,3]
+        acc = torch.einsum("bij,btj->bti", R, x[:, :, 0:3])
+        gyr = torch.einsum("bij,btj->bti", R, x[:, :, 3:6])
+        xr = torch.cat([acc, gyr], -1)
+
+        ch_std = x.std(dim=1, keepdim=True) + 1e-6
+        noise = torch.randn(B, T, C, generator=g, device=dev) * self.noise_std_frac * ch_std
+        gain = 1 + (torch.rand(B, 1, C, generator=g, device=dev) * 2 - 1) * self.gain_jitter_frac
+        ramp = torch.linspace(0, 1, T, device=dev)[None, :, None]
+        drift = ramp * (torch.rand(B, 1, C, generator=g, device=dev) * 2 - 1) * self.bias_walk_frac * ch_std
+        xa = (xr + noise) * gain + drift
+
+        return torch.where(apply[:, None, None], xa, x)
+
+
 @dataclass
 class Augmenter:
+    """Per-window NumPy augmenter (kept for the reference/eval path). The
+    training loop uses BatchAugmenter."""
     rot_max_deg: float = 12.0          # static mount perturbation
     noise_std_frac: float = 0.03       # additive noise, fraction of channel std
     gain_jitter_frac: float = 0.05     # per-channel multiplicative

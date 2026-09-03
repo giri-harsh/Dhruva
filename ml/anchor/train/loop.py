@@ -20,7 +20,7 @@ import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from ..models.anchornet import AnchorNet, AnchorNetConfig
-from .augment import Augmenter
+from .augment import BatchAugmenter
 from .dataset import AnchorWindowDataset
 from .losses import context_loss, speed_loss, yaw_loss
 
@@ -49,11 +49,14 @@ def _seed_everything(s: int, threads: int = 5):
     torch.set_num_threads(threads)
 
 
-def _run_epoch(model, loader, opt, cfg, train: bool, device, *, use_nll: bool):
+def _run_epoch(model, loader, opt, cfg, train: bool, device, *, use_nll: bool,
+               augmenter=None, gen=None):
     model.train(train)
     agg = {"loss": 0.0, "nll": 0.0, "rmse": 0.0, "bias": 0.0, "sigma": 0.0, "n": 0}
     for batch in loader:
         x = batch["x"].to(device)
+        if train and augmenter is not None:
+            x = augmenter(x, gen)
         y = batch["target_speed"].to(device)
         ls = batch["label_sigma"].to(device)
         w = batch.get("mean_weight")
@@ -89,9 +92,10 @@ def _run_epoch(model, loader, opt, cfg, train: bool, device, *, use_nll: bool):
 def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: TrainConfig,
                    out_dir: Path, device="cpu") -> dict:
     _seed_everything(seed, cfg.num_threads)
-    aug = Augmenter()
+    aug = BatchAugmenter()
+    gen = torch.Generator().manual_seed(seed)
     ds_tr = AnchorWindowDataset(train_seqs, radius_m=radius_m, normalizer=normalizer,
-                                training=True, augmenter=aug, seed=seed)
+                                training=True, augmenter=None, seed=seed)
     ds_va = AnchorWindowDataset(val_seqs, radius_m=radius_m, normalizer=normalizer,
                                 training=False, seed=seed)
     sampler = WeightedRandomSampler(ds_tr.sample_weights().tolist(), len(ds_tr), replacement=True)
@@ -101,7 +105,9 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
 
     model = AnchorNet(cfg.model).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=cfg.max_epochs)
+    warm = torch.optim.lr_scheduler.LinearLR(opt, start_factor=0.15, total_iters=2)
+    cos = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(cfg.max_epochs - 2, 1))
+    sched = torch.optim.lr_scheduler.SequentialLR(opt, [warm, cos], milestones=[2])
 
     print(f"  seed {seed}: {len(ds_tr)} train / {len(ds_va)} val windows, "
           f"{model.num_parameters()} params, warmup {cfg.warmup_epochs} (MSE) then beta-NLL",
@@ -113,7 +119,8 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
     for epoch in range(cfg.max_epochs):
         use_nll = epoch >= cfg.warmup_epochs
         t0 = time.time()
-        tr = _run_epoch(model, dl_tr, opt, cfg, True, device, use_nll=use_nll)
+        tr = _run_epoch(model, dl_tr, opt, cfg, True, device, use_nll=use_nll,
+                        augmenter=aug, gen=gen)
         va = _run_epoch(model, dl_va, opt, cfg, False, device, use_nll=use_nll)
         sched.step()
         dt = round(time.time() - t0, 1)

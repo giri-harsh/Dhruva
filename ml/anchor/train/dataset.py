@@ -92,6 +92,9 @@ class AnchorWindowDataset(Dataset):
         window = self.feats[seq_id][a:b].astype(np.float32)   # [20, 6]
         if window.shape[0] != WINDOW_SIZE_SAMPLES:
             window = np.pad(window, ((0, WINDOW_SIZE_SAMPLES - window.shape[0]), (0, 0)))
+        # augmentation is applied batch-vectorised in the training loop
+        # (BatchAugmenter) — far cheaper than per-window here. `self.aug` is only
+        # used by the reference/eval path if ever set.
         if self.aug is not None:
             window = self.aug(window, self._rng)
 
