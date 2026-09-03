@@ -42,3 +42,6 @@ Thumbs.db
 
 # bench results are regenerable + timestamped — curated snapshots committed explicitly
 ml/bench/results/
+
+ml/.cache/
+ml/train/runs/
