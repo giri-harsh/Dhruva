@@ -122,6 +122,26 @@ weak proxy and is reported as the honest zero-line only.
 the real ablation-row-5-vs-row-3 comparison can run; scenario-label the golden
 set so the per-scenario breakdown (where the win concentrates) is visible.
 
+## Two-stage (pre-train on unsync -> fine-tune on sync) — helps, as the PRD predicted
+
+`ml/train/runs/week3_twostage` = `run.py --init-from
+ml/train/pretrain/week3_stage1/pretrain.pt` (Stage-1: MSE on ~23 h unsync
+France+Vw, GNSS weak labels, val RMSE 2.85).
+
+| | from scratch (`week3_headAB`) | two-stage (`week3_twostage`) |
+|---|---|---|
+| val speed RMSE (Vtb) | 5.51 ± 0.10 | **5.46 ± 0.03** (much tighter across seeds) |
+| Vta bias | +1.83 m/s | **+1.22 m/s** (domain shift cut ~1/3) |
+| DR drift vs B1 @ 30/60/120/180 s | +3.8 / −0 / −3.3 / **−18.6** % | **+7.5 / −2.7 / −2.4 / −6.5** % |
+| best epoch | ~20 | ~14 |
+
+The pre-train is a strong, consistent initialisation: it cuts the domain-shift
+bias by a third and improves the standalone drift at every outage duration
+(the 180 s degradation shrinks from −19 % to −7 %). The standalone DR is now
+essentially **at parity with B1** — marginally ahead at short outages, marginally
+behind at long ones. Calibration stays the weak point (ECE noisy, ~0.15–0.37
+across seeds); a scalar temperature isn't enough — per-bin / isotonic next.
+
 ## Calibration (FR-08)
 
 Raw Head-B variance is ~1.4x overconfident (ECE_sigma ~0.20). A single-scalar
