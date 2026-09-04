@@ -1,55 +1,55 @@
 {
-  "generated_utc": "2026-09-04T09:16:48.381757+00:00",
-  "run": "week3_headAB",
+  "generated_utc": "2026-09-04T09:43:32.991142+00:00",
+  "run": "week3_twostage",
   "split": "test_id",
   "window_level": {
     "overall_rmse_mps": {
-      "mean": 5.6798,
-      "std": 0.098
+      "mean": 5.4482,
+      "std": 0.0975
     },
     "overall_bias_mps": {
-      "mean": 1.8273,
-      "std": 0.2244
+      "mean": 1.2218,
+      "std": 0.2816
     },
     "ece_sigma_calibrated": {
-      "mean": 0.1529,
-      "std": 0.0156
+      "mean": 0.3721,
+      "std": 0.2569
     },
     "pit_ks_calibrated": {
-      "mean": 0.1832,
-      "std": 0.015
+      "mean": 0.2194,
+      "std": 0.1225
     },
     "variance_temperature": {
-      "mean": 1.1641,
-      "std": 0.1015
+      "mean": 0.9907,
+      "std": 0.4907
     }
   },
   "drift_vs_B1": [
     {
       "duration_s": 30,
       "B1_drift_pct": 36.671,
-      "ANCHORNET_drift_pct": 35.264,
-      "rel_improvement_vs_B1_pct": 3.8
+      "ANCHORNET_drift_pct": 33.909,
+      "rel_improvement_vs_B1_pct": 7.5
     },
     {
       "duration_s": 60,
       "B1_drift_pct": 49.586,
-      "ANCHORNET_drift_pct": 49.597,
-      "rel_improvement_vs_B1_pct": -0.0
+      "ANCHORNET_drift_pct": 50.936,
+      "rel_improvement_vs_B1_pct": -2.7
     },
     {
       "duration_s": 120,
       "B1_drift_pct": 61.631,
-      "ANCHORNET_drift_pct": 63.692,
-      "rel_improvement_vs_B1_pct": -3.3
+      "ANCHORNET_drift_pct": 63.124,
+      "rel_improvement_vs_B1_pct": -2.4
     },
     {
       "duration_s": 180,
       "B1_drift_pct": 73.274,
-      "ANCHORNET_drift_pct": 86.87,
-      "rel_improvement_vs_B1_pct": -18.6
+      "ANCHORNET_drift_pct": 78.072,
+      "rel_improvement_vs_B1_pct": -6.5
     }
   ],
-  "fr24_rejected_windows": 440,
+  "fr24_rejected_windows": 413,
   "note": "B3 (Kamal's ESKF+NHC+ZUPT) is the real Week-5 bar; B1 shown here as the honest zero-line until B3 is wired into this harness."
 }
