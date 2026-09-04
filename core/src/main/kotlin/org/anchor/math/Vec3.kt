@@ -10,6 +10,9 @@ package org.anchor.math
 data class Vec3(val x: Double, val y: Double, val z: Double) {
     operator fun minus(other: Vec3) = Vec3(x - other.x, y - other.y, z - other.z)
     operator fun plus(other: Vec3) = Vec3(x + other.x, y + other.y, z + other.z)
+    /** Added Week 2 -- org.anchor.fusion needs scalar-times-vector for its
+     *  dt-scaled integration terms. Purely additive. */
+    operator fun times(scalar: Double) = Vec3(x * scalar, y * scalar, z * scalar)
     fun norm(): Double = kotlin.math.sqrt(x * x + y * y + z * z)
 
     fun toDoubleArray(): DoubleArray = doubleArrayOf(x, y, z)
