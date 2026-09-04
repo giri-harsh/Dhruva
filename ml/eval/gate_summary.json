@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-04T09:09:50.806797+00:00",
+  "generated_utc": "2026-09-04T09:16:48.381757+00:00",
   "run": "week3_headAB",
   "split": "test_id",
   "window_level": {
@@ -12,16 +12,16 @@
       "std": 0.2244
     },
     "ece_sigma_calibrated": {
-      "mean": 0.3486,
-      "std": 0.1042
+      "mean": 0.1529,
+      "std": 0.0156
     },
     "pit_ks_calibrated": {
-      "mean": 0.1879,
-      "std": 0.0146
+      "mean": 0.1832,
+      "std": 0.015
     },
     "variance_temperature": {
-      "mean": 1.6152,
-      "std": 0.1653
+      "mean": 1.1641,
+      "std": 0.1015
     }
   },
   "drift_vs_B1": [
