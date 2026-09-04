@@ -1,0 +1,40 @@
+name: ml-ci
+
+# ML-track tests that do NOT need the IO-VNBD dataset (it's a ~2 GB LFS repo,
+# not vendored). Dataset-dependent tests (loader, splits, golden regression
+# gate, integrity --check) skip here and are run pre-push locally / on a
+# self-hosted runner that caches the data.
+on:
+  push:
+    branches: [main, "ml/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ml-unit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: ML unit tests (no dataset)
+        run: |
+          python -m pytest -q -p no:cacheprovider `
+            ml/tests/test_units.py `
+            ml/tests/test_losses.py `
+            ml/tests/test_calibration.py `
+            ml/tests/test_calibration_isotonic.py `
+            ml/tests/test_model_and_provenance.py `
+            ml/tests/test_context_head.py `
+            ml/tests/test_integrity.py `
+            ml/tests/test_windower.py `
+            ml/tests/test_normalizer.py `
+            ml/tests/test_export_and_eval.py `
+            -k "not fr07 and not slow"
+      - name: Backend contract-parity tests
+        run: python -m pytest -q backend/tests/ -p no:cacheprovider
+      - name: ANCHOR-Net -> ONNX exports and round-trips
+        run: |
+          python -c "import torch, tempfile, os; from pathlib import Path; import sys; sys.path.insert(0,'ml'); from anchor.models.anchornet import AnchorNet; from anchor.export.to_onnx import export_anchornet; d=Path(tempfile.mkdtemp()); torch.save(AnchorNet().state_dict(), d/'m.pt'); export_anchornet(d/'m.pt', d/'a.onnx'); print('export OK')"
