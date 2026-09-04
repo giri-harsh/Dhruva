@@ -38,11 +38,15 @@ def _cfg(**model_kw) -> TrainConfig:
 
 
 ROWS: list[AblationRow] = [
-    AblationRow(1, "b2_strapdown", "Strapdown INS only (B2)", owner="kamal",
-                notes="Kamal's reference/anchor_ref; physics-only double integration"),
-    AblationRow(2, "b2_nhc", "+ NHC", owner="kamal"),
+    AblationRow(1, "b2_strapdown", "Strapdown INS only (B2)", owner="ml",
+                notes="reference/anchor_ref/strapdown.py — physics-only double "
+                      "integration, RUNNABLE. test_id median drift 71/124/117/160% "
+                      "@ 30/60/120/180 s (quadratic error growth, PRD §1.2)."),
+    AblationRow(2, "b2_nhc", "+ NHC", owner="kamal",
+                notes="needs reference/anchor_ref/eskf.py"),
     AblationRow(3, "b3_nhc_zupt", "+ NHC + ZUPT (B3)", owner="kamal",
-                notes="the ablation that decides whether the ML earns its place"),
+                notes="the ablation that decides whether the ML earns its place; "
+                      "reference/anchor_ref/eskf.py interface spec in that README"),
     AblationRow(4, "vel_fixed_r", "+ velocity head, fixed R", owner="ml",
                 train=_cfg(), variance_mode="fixed_R"),
     AblationRow(5, "vel_pred_var", "+ velocity head, predicted sigma^2 -> R  (primary claim)",
