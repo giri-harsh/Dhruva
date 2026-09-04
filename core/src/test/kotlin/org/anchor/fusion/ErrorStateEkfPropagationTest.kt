@@ -1,6 +1,7 @@
 package org.anchor.fusion
 
 import org.anchor.math.Mat
+import org.anchor.math.Vec
 import org.anchor.math.Vec3
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -234,6 +235,110 @@ class ErrorStateEkfPropagationTest {
         assertTrue(
             abs(ekf.state.accelBias.x - trueBias) < abs(trueBias),
             "bias estimate (${ekf.state.accelBias.x}) did not move toward the true bias ($trueBias)",
+        )
+    }
+
+    // ---- Gyroscope bias injection ----
+    //
+    // Deliberately NOT a re-test of the constant-turn (C) case above under
+    // a different name. Worked out before writing this: with the vehicle
+    // otherwise stationary (specific force exactly [0,0,g], aligned with
+    // the z rotation axis), an erroneous yaw rotation from an unmodelled
+    // gyro bias leaves accelNav = R(q)*[0,0,g] + gravity = [0,0,g]+[0,0,-g]
+    // = [0,0,0] EXACTLY regardless of the erroneous heading -- rotating a
+    // vector already aligned with the rotation axis changes nothing. So a
+    // stationary gyro-bias test isolates the PURE ATTITUDE effect (heading
+    // drifts, position provably does not), which is a genuinely different,
+    // non-redundant check from Test C's demonstration that a nonzero gyro
+    // reading combined with a correspondingly-rotating specific force
+    // curves the trajectory -- that mechanism is identical whether the
+    // rotation is an intentional turn or an unmodelled bias; re-testing it
+    // here under a "bias" label would not be checking anything new.
+
+    @Test
+    fun `unmodelled gyro bias produces linear heading drift with no accompanying position drift`() {
+        // b and T chosen to match v3 PRD Section1.2's own worked example
+        // (0.1 deg/s residual yaw bias) exactly, so the result is directly
+        // comparable to the PRD's own number, not an arbitrary magnitude.
+        val bias = 0.1 * Math.PI / 180.0 // 0.1 deg/s in rad/s, per PRD Section1.2
+        val ekf = ErrorStateEkf(NominalState.zero(), modestCovariance())
+        val dt = 0.01
+        val steps = 6000 // 60 s, matching the PRD's own example duration
+
+        repeat(steps) { ekf.propagate(Vec3(0.0, 0.0, g), Vec3(0.0, 0.0, bias), dt) }
+
+        val elapsed = steps * dt
+        val expectedHeading = bias * elapsed // ~0.1047 rad, ~6.0 degrees
+        val forwardNav = ekf.state.orientation.rotate(Vec3(1.0, 0.0, 0.0))
+        assertEquals(cos(expectedHeading), forwardNav.x, 1e-6)
+        assertEquals(sin(expectedHeading), forwardNav.y, 1e-6)
+
+        // The point of isolating this from Test C: with zero net specific
+        // force imbalance, the erroneous heading has nothing to misdirect
+        // -- position must stay at EXACTLY zero despite attitude having
+        // drifted by several degrees. (Cross-track position error, per the
+        // PRD's own formula, is what happens when this same heading drift
+        // ALSO redirects a real forward acceleration -- that is Test C's
+        // mechanism, not repeated here.)
+        assertEquals(0.0, ekf.state.position.x, 1e-9)
+        assertEquals(0.0, ekf.state.position.y, 1e-9)
+        assertEquals(0.0, ekf.state.velocity.norm(), 1e-9)
+        assertEquals(0.0, ekf.state.gyroBias.z, 1e-12, "bias STATE must stay at zero with no correction applied")
+    }
+
+    /** Synthetic, test-only direct attitude-error observation -- the exact
+     *  analogue of ErrorStateEkfCorrectionTest's DirectPositionXObservation,
+     *  for the theta block instead of position. Honestly not a real
+     *  sensor (no phone sensor observes attitude error directly); it
+     *  exists to isolate and demonstrate the delta-theta <-> delta-b_g
+     *  Kalman coupling on its own, the same way that test isolates
+     *  delta-p <-> nothing and VelocityUpdate exercises delta-v <-> delta-b_a. */
+    private class DirectYawErrorObservation(private val observedRadians: Double, private val varianceValue: Double) : MeasurementModel {
+        override val name = "TestDirectYawError"
+        override val dimension = 1
+        override fun predicted(state: NominalState): Vec {
+            // First-order proxy for the z-component of attitude error: for
+            // a pure-yaw rotation from identity, atan2(forward.y, forward.x)
+            // IS the yaw angle exactly, not just to first order.
+            val forward = state.orientation.rotate(Vec3(1.0, 0.0, 0.0))
+            return Vec.of(kotlin.math.atan2(forward.y, forward.x))
+        }
+        override fun actual(): Vec = Vec.of(observedRadians)
+        override fun jacobian(state: NominalState): Mat {
+            val h = Mat.zeros(1, ErrorStateLayout.DIM)
+            h[0, ErrorStateLayout.THETA + 2] = 1.0 // selects delta-theta_z directly
+            return h
+        }
+        override fun noise(): Mat = Mat(1, 1, doubleArrayOf(varianceValue))
+    }
+
+    @Test
+    fun `repeated direct attitude corrections shrink gyroscope bias covariance and move the estimate toward truth`() {
+        // Structural mirror of the accelerometer-bias-learning test above:
+        // propagate with an unmodelled gyro bias, interleave repeated
+        // corrections, confirm the bias ESTIMATE moves toward truth and
+        // its covariance shrinks. Uses DirectYawErrorObservation rather
+        // than a real measurement model because none of NHC/ZUPT/
+        // VelocityUpdate observe attitude at all (they are all body-
+        // velocity observations) -- this deliberately tests the filter's
+        // generic delta-theta<->delta-b_g coupling in isolation, the same
+        // way Test E's generic-update test isolates the correction
+        // machinery from any specific physical model.
+        val trueBias = 0.05 // rad/s
+        val ekf = ErrorStateEkf(NominalState.zero(), modestCovariance())
+        val dt = 0.01
+        val biasVarianceBefore = ekf.covariance[ErrorStateLayout.GYRO_BIAS + 2, ErrorStateLayout.GYRO_BIAS + 2]
+
+        repeat(500) { // 5 s, same window as the proven-sufficient accel-bias case
+            ekf.propagate(Vec3(0.0, 0.0, g), Vec3(0.0, 0.0, trueBias), dt)
+            if (it % 10 == 9) ekf.correct(DirectYawErrorObservation(observedRadians = 0.0, varianceValue = 0.01))
+        }
+
+        val biasVarianceAfter = ekf.covariance[ErrorStateLayout.GYRO_BIAS + 2, ErrorStateLayout.GYRO_BIAS + 2]
+        assertTrue(biasVarianceAfter < biasVarianceBefore, "gyro bias covariance should shrink after repeated correlated corrections")
+        assertTrue(
+            abs(ekf.state.gyroBias.z - trueBias) < abs(trueBias),
+            "gyro bias estimate (${ekf.state.gyroBias.z}) did not move toward the true bias ($trueBias)",
         )
     }
 }
