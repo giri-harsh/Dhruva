@@ -1,0 +1,524 @@
+{
+  "detector": "InnovationResidualDetector",
+  "target_false_rejection": 0.02,
+  "detection_horizon_s": {
+    "step": 8.0,
+    "drag": 25.0,
+    "multipath": 8.0,
+    "jam": 8.0
+  },
+  "operating_threshold": 2.686,
+  "seed": 20260903,
+  "families": {
+    "step": {
+      "family": "step",
+      "swept_param": [
+        1.0,
+        2.0,
+        3.0,
+        5.0,
+        10.0,
+        20.0,
+        40.0,
+        80.0
+      ],
+      "roc": [
+        {
+          "thr": 1.227,
+          "detection": 1.0,
+          "false_rejection": 0.5
+        },
+        {
+          "thr": 1.262,
+          "detection": 1.0,
+          "false_rejection": 0.4799
+        },
+        {
+          "thr": 1.282,
+          "detection": 1.0,
+          "false_rejection": 0.4583
+        },
+        {
+          "thr": 1.309,
+          "detection": 1.0,
+          "false_rejection": 0.4382
+        },
+        {
+          "thr": 1.32,
+          "detection": 1.0,
+          "false_rejection": 0.4167
+        },
+        {
+          "thr": 1.354,
+          "detection": 1.0,
+          "false_rejection": 0.3966
+        },
+        {
+          "thr": 1.395,
+          "detection": 1.0,
+          "false_rejection": 0.375
+        },
+        {
+          "thr": 1.428,
+          "detection": 1.0,
+          "false_rejection": 0.3549
+        },
+        {
+          "thr": 1.45,
+          "detection": 1.0,
+          "false_rejection": 0.3333
+        },
+        {
+          "thr": 1.485,
+          "detection": 0.995,
+          "false_rejection": 0.3132
+        },
+        {
+          "thr": 1.52,
+          "detection": 0.995,
+          "false_rejection": 0.2917
+        },
+        {
+          "thr": 1.568,
+          "detection": 0.98,
+          "false_rejection": 0.2716
+        },
+        {
+          "thr": 1.61,
+          "detection": 0.975,
+          "false_rejection": 0.2514
+        },
+        {
+          "thr": 1.646,
+          "detection": 0.975,
+          "false_rejection": 0.2299
+        },
+        {
+          "thr": 1.695,
+          "detection": 0.96,
+          "false_rejection": 0.2098
+        },
+        {
+          "thr": 1.73,
+          "detection": 0.955,
+          "false_rejection": 0.1882
+        },
+        {
+          "thr": 1.772,
+          "detection": 0.955,
+          "false_rejection": 0.1681
+        },
+        {
+          "thr": 1.859,
+          "detection": 0.95,
+          "false_rejection": 0.1466
+        },
+        {
+          "thr": 1.965,
+          "detection": 0.91,
+          "false_rejection": 0.1264
+        },
+        {
+          "thr": 2.044,
+          "detection": 0.88,
+          "false_rejection": 0.1049
+        },
+        {
+          "thr": 2.129,
+          "detection": 0.855,
+          "false_rejection": 0.0848
+        },
+        {
+          "thr": 2.205,
+          "detection": 0.82,
+          "false_rejection": 0.0647
+        },
+        {
+          "thr": 2.38,
+          "detection": 0.715,
+          "false_rejection": 0.0431
+        },
+        {
+          "thr": 2.652,
+          "detection": 0.62,
+          "false_rejection": 0.023
+        },
+        {
+          "thr": 3.705,
+          "detection": 0.3,
+          "false_rejection": 0.0014
+        }
+      ],
+      "operating_threshold": 2.686,
+      "detection_at_operating": {
+        "1.0": 0.48,
+        "2.0": 0.44,
+        "3.0": 0.36,
+        "5.0": 0.32,
+        "10.0": 0.56,
+        "20.0": 0.72,
+        "40.0": 1.0,
+        "80.0": 1.0
+      },
+      "false_rejection_at_operating": 0.0201,
+      "provably_undetected_param": 5.0,
+      "note": ""
+    },
+    "drag": {
+      "family": "drag",
+      "swept_param": [
+        0.05,
+        0.1,
+        0.2,
+        0.4,
+        0.8,
+        1.6
+      ],
+      "roc": [
+        {
+          "thr": 1.227,
+          "detection": 1.0,
+          "false_rejection": 0.5
+        },
+        {
+          "thr": 1.262,
+          "detection": 1.0,
+          "false_rejection": 0.4799
+        },
+        {
+          "thr": 1.282,
+          "detection": 1.0,
+          "false_rejection": 0.4583
+        },
+        {
+          "thr": 1.309,
+          "detection": 1.0,
+          "false_rejection": 0.4382
+        },
+        {
+          "thr": 1.32,
+          "detection": 1.0,
+          "false_rejection": 0.4167
+        },
+        {
+          "thr": 1.354,
+          "detection": 1.0,
+          "false_rejection": 0.3966
+        },
+        {
+          "thr": 1.395,
+          "detection": 1.0,
+          "false_rejection": 0.375
+        },
+        {
+          "thr": 1.428,
+          "detection": 1.0,
+          "false_rejection": 0.3549
+        },
+        {
+          "thr": 1.45,
+          "detection": 1.0,
+          "false_rejection": 0.3333
+        },
+        {
+          "thr": 1.485,
+          "detection": 1.0,
+          "false_rejection": 0.3132
+        },
+        {
+          "thr": 1.52,
+          "detection": 1.0,
+          "false_rejection": 0.2917
+        },
+        {
+          "thr": 1.568,
+          "detection": 1.0,
+          "false_rejection": 0.2716
+        },
+        {
+          "thr": 1.61,
+          "detection": 1.0,
+          "false_rejection": 0.2514
+        },
+        {
+          "thr": 1.646,
+          "detection": 1.0,
+          "false_rejection": 0.2299
+        },
+        {
+          "thr": 1.695,
+          "detection": 1.0,
+          "false_rejection": 0.2098
+        },
+        {
+          "thr": 1.73,
+          "detection": 1.0,
+          "false_rejection": 0.1882
+        },
+        {
+          "thr": 1.772,
+          "detection": 1.0,
+          "false_rejection": 0.1681
+        },
+        {
+          "thr": 1.859,
+          "detection": 1.0,
+          "false_rejection": 0.1466
+        },
+        {
+          "thr": 1.965,
+          "detection": 0.9933,
+          "false_rejection": 0.1264
+        },
+        {
+          "thr": 2.044,
+          "detection": 0.98,
+          "false_rejection": 0.1049
+        },
+        {
+          "thr": 2.129,
+          "detection": 0.92,
+          "false_rejection": 0.0848
+        },
+        {
+          "thr": 2.205,
+          "detection": 0.8733,
+          "false_rejection": 0.0647
+        },
+        {
+          "thr": 2.38,
+          "detection": 0.7933,
+          "false_rejection": 0.0431
+        },
+        {
+          "thr": 2.652,
+          "detection": 0.6333,
+          "false_rejection": 0.023
+        },
+        {
+          "thr": 3.705,
+          "detection": 0.0267,
+          "false_rejection": 0.0014
+        }
+      ],
+      "operating_threshold": 2.686,
+      "detection_at_operating": {
+        "0.05": 0.52,
+        "0.1": 0.56,
+        "0.2": 0.56,
+        "0.4": 0.8,
+        "0.8": 0.56,
+        "1.6": 0.64
+      },
+      "false_rejection_at_operating": 0.0201,
+      "provably_undetected_param": null,
+      "note": ""
+    },
+    "jam": {
+      "family": "jam",
+      "swept_param": [
+        5.0,
+        15.0,
+        30.0,
+        60.0
+      ],
+      "roc": [],
+      "operating_threshold": 2.686,
+      "detection_at_operating": {
+        "5.0": 1.0,
+        "15.0": 1.0,
+        "30.0": 1.0,
+        "60.0": 1.0
+      },
+      "false_rejection_at_operating": 0.1621,
+      "provably_undetected_param": null,
+      "note": "jam: outage is always observed; value reported is the false-rejection rate on the first 5 s of reacquired fixes"
+    },
+    "multipath": {
+      "family": "multipath",
+      "swept_param": [
+        0.05,
+        0.1,
+        0.25,
+        0.5,
+        0.9
+      ],
+      "roc": [
+        {
+          "thr": 1.227,
+          "detection": 0.9579,
+          "false_rejection": 0.5
+        },
+        {
+          "thr": 1.262,
+          "detection": 0.9579,
+          "false_rejection": 0.4799
+        },
+        {
+          "thr": 1.282,
+          "detection": 0.9579,
+          "false_rejection": 0.4583
+        },
+        {
+          "thr": 1.309,
+          "detection": 0.9579,
+          "false_rejection": 0.4382
+        },
+        {
+          "thr": 1.32,
+          "detection": 0.9579,
+          "false_rejection": 0.4167
+        },
+        {
+          "thr": 1.354,
+          "detection": 0.9579,
+          "false_rejection": 0.3966
+        },
+        {
+          "thr": 1.395,
+          "detection": 0.9579,
+          "false_rejection": 0.375
+        },
+        {
+          "thr": 1.428,
+          "detection": 0.9579,
+          "false_rejection": 0.3549
+        },
+        {
+          "thr": 1.45,
+          "detection": 0.9579,
+          "false_rejection": 0.3333
+        },
+        {
+          "thr": 1.485,
+          "detection": 0.9579,
+          "false_rejection": 0.3132
+        },
+        {
+          "thr": 1.52,
+          "detection": 0.9579,
+          "false_rejection": 0.2917
+        },
+        {
+          "thr": 1.568,
+          "detection": 0.9368,
+          "false_rejection": 0.2716
+        },
+        {
+          "thr": 1.61,
+          "detection": 0.9158,
+          "false_rejection": 0.2514
+        },
+        {
+          "thr": 1.646,
+          "detection": 0.9053,
+          "false_rejection": 0.2299
+        },
+        {
+          "thr": 1.695,
+          "detection": 0.8947,
+          "false_rejection": 0.2098
+        },
+        {
+          "thr": 1.73,
+          "detection": 0.8842,
+          "false_rejection": 0.1882
+        },
+        {
+          "thr": 1.772,
+          "detection": 0.8842,
+          "false_rejection": 0.1681
+        },
+        {
+          "thr": 1.859,
+          "detection": 0.8526,
+          "false_rejection": 0.1466
+        },
+        {
+          "thr": 1.965,
+          "detection": 0.8211,
+          "false_rejection": 0.1264
+        },
+        {
+          "thr": 2.044,
+          "detection": 0.8105,
+          "false_rejection": 0.1049
+        },
+        {
+          "thr": 2.129,
+          "detection": 0.7684,
+          "false_rejection": 0.0848
+        },
+        {
+          "thr": 2.205,
+          "detection": 0.7579,
+          "false_rejection": 0.0647
+        },
+        {
+          "thr": 2.38,
+          "detection": 0.7158,
+          "false_rejection": 0.0431
+        },
+        {
+          "thr": 2.652,
+          "detection": 0.6737,
+          "false_rejection": 0.023
+        },
+        {
+          "thr": 3.705,
+          "detection": 0.3053,
+          "false_rejection": 0.0014
+        }
+      ],
+      "operating_threshold": 2.686,
+      "detection_at_operating": {
+        "0.05": 0.4545,
+        "0.1": 0.1,
+        "0.25": 0.5833,
+        "0.5": 0.76,
+        "0.9": 0.96
+      },
+      "false_rejection_at_operating": 0.0201,
+      "provably_undetected_param": 0.1,
+      "note": ""
+    }
+  },
+  "provenance": {
+    "generated_utc": "2026-09-04T10:19:34.905543+00:00",
+    "attack_sequences": [
+      "vta01a",
+      "vta01b",
+      "vta02",
+      "vta03",
+      "vta04",
+      "vta06",
+      "vta07",
+      "vta08",
+      "vta10",
+      "vta12",
+      "vta14",
+      "vta15",
+      "vta16",
+      "vta17",
+      "vta20",
+      "vta21",
+      "vta22",
+      "vta23",
+      "vta24",
+      "vta25",
+      "vta26",
+      "vta27",
+      "vta28",
+      "vta29",
+      "vta30"
+    ],
+    "clean_sequences": [
+      "s1",
+      "s2",
+      "s3a",
+      "s3b",
+      "s3c",
+      "s4"
+    ]
+  }
+}
