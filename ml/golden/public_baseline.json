@@ -1,0 +1,59 @@
+{
+  "generated_utc": "2026-09-04T09:55:20.170482+00:00",
+  "run": "week3_twostage",
+  "checkpoint": "anchornet_seed0.pt",
+  "median_drift_pct": 99.9253,
+  "mean_drift_pct": 107.0607,
+  "per_segment": [
+    {
+      "key": "s2:0:1040:30",
+      "scenario": "stop_start",
+      "drift_pct": 288.137
+    },
+    {
+      "key": "s2:0:550:120",
+      "scenario": "stop_start",
+      "drift_pct": 122.094
+    },
+    {
+      "key": "s3a:0:15780:180",
+      "scenario": "sharp_cornering",
+      "drift_pct": 52.404
+    },
+    {
+      "key": "s3b:0:190:60",
+      "scenario": "hard_braking",
+      "drift_pct": 152.951
+    },
+    {
+      "key": "s3b:1:4853:180",
+      "scenario": "stop_start",
+      "drift_pct": 103.74
+    },
+    {
+      "key": "s4:1:65156:120",
+      "scenario": "sharp_cornering",
+      "drift_pct": 14.558
+    },
+    {
+      "key": "s4:1:70006:180",
+      "scenario": "roundabout",
+      "drift_pct": 98.477
+    },
+    {
+      "key": "s4:1:84036:180",
+      "scenario": "sharp_cornering",
+      "drift_pct": 101.374
+    },
+    {
+      "key": "s4:2:91507:30",
+      "scenario": "sharp_cornering",
+      "drift_pct": 63.505
+    },
+    {
+      "key": "vfa02:0:22150:180",
+      "scenario": "motorway_cruise",
+      "drift_pct": 73.368
+    }
+  ]
+}

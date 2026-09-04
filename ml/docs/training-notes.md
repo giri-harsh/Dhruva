@@ -137,10 +137,43 @@ France+Vw, GNSS weak labels, val RMSE 2.85).
 
 The pre-train is a strong, consistent initialisation: it cuts the domain-shift
 bias by a third and improves the standalone drift at every outage duration
-(the 180 s degradation shrinks from −19 % to −7 %). The standalone DR is now
-essentially **at parity with B1** — marginally ahead at short outages, marginally
-behind at long ones. Calibration stays the weak point (ECE noisy, ~0.15–0.37
-across seeds); a scalar temperature isn't enough — per-bin / isotonic next.
+(the 180 s degradation shrinks from −19 % to −7 %). The standalone DR is
+essentially **at parity with B1** on a random outage sample — marginally ahead at
+short outages, marginally behind at long ones.
+
+## Golden set (PRD §14.7) — per-scenario, the standalone DR is poor on the hard ones
+
+`ml/golden/manifest.json` — 40 frozen outage segments, test splits only,
+stratified by scenario × duration; the first 10 (by key) are the CI public
+subset. `python -m anchor.golden.regression_gate` scores the DR over them.
+
+Public-subset baseline (two-stage model, `ml/golden/public_baseline.json`):
+**median drift 100 %**, and the per-segment story is the point —
+
+| scenario | drift % |
+|---|---|
+| stop_start | 104, 122, **288** |
+| hard_braking | 153 |
+| sharp_cornering | 15, 52, 64, 101 |
+| roundabout | 98 |
+| motorway_cruise | 73 |
+
+The standalone DR falls apart on **stop-start and hard-braking** — precisely the
+scenarios Kamal's **ZUPT** (a stopped vehicle → ~0 drift) and **NHC** exist to
+handle, and which no amount of velocity-head accuracy fixes without a filter.
+The random-sample gate (parity with B1) was averaging over easy motorway
+stretches; the stratified golden set surfaces the real weakness. This is
+strong evidence for the §20.1 framing: the velocity head's value is realised
+**inside the filter**, not standalone.
+
+## Calibration (FR-08)
+
+Head B is *shape*-miscalibrated, not just scale — a scalar temperature gets
+ECE_sigma to ~0.37 (noisy). `IsotonicVarianceCalibrator` (monotone
+predicted-σ → realised-error map, fit on val) gets it to **0.17 ± 0.01** on the
+Vta test set — better and far more stable, though above the ~0.05 target because
+val (Vtb) → test (Vta) is itself a distribution shift. On in-distribution
+synthetic data isotonic reaches ECE 0.025.
 
 ## Calibration (FR-08)
 
