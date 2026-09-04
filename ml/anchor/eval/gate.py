@@ -79,8 +79,8 @@ def main() -> None:
         "window_level": {
             "overall_rmse_mps": win["overall_rmse_mps"],
             "overall_bias_mps": win["overall_bias_mps"],
-            "ece_sigma_calibrated": win["ece_sigma"],
-            "pit_ks_calibrated": win["pit_ks"],
+            "ece_sigma_scalar_T": win["ece_sigma_scalar_T"],
+            "ece_sigma_isotonic": win["ece_sigma_isotonic"],
             "variance_temperature": win["variance_temperature"],
         },
         "drift_vs_B1": rows,

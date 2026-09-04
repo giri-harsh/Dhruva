@@ -98,21 +98,32 @@ def evaluate_run(run_dir: str, sequences, *, radius_m: float, normalizer_path: s
                  val_sequences=None) -> dict:
     """If `val_sequences` is given, a per-seed Head-B variance temperature is
     fitted on val and applied to the reported (test) calibration."""
+    from .calibration import IsotonicVarianceCalibrator, assess_calibration
+
     rd = Path(run_dir)
     ckpts = sorted(rd.glob("anchornet_seed*.pt"))
     per_seed = []
     for c in ckpts:
         T = 1.0
+        iso = None
         if val_sequences is not None:
             vr = evaluate_split(val_sequences, checkpoint_path=str(c),
                                 normalizer_path=normalizer_path, radius_m=radius_m)
-            raw = vr["_raw"]
-            T = fit_variance_temperature(raw["y"], raw["mu"], raw["logvar"],
-                                         label_sigma=raw["lsig"])
+            vraw = vr["_raw"]
+            T = fit_variance_temperature(vraw["y"], vraw["mu"], vraw["logvar"],
+                                         label_sigma=vraw["lsig"])
+            iso = IsotonicVarianceCalibrator.fit(vraw["y"], vraw["mu"], vraw["logvar"],
+                                                 label_sigma=vraw["lsig"])
         r = evaluate_split(sequences, checkpoint_path=str(c),
                            normalizer_path=normalizer_path, radius_m=radius_m,
                            variance_temperature=T)
-        r.pop("_raw", None)
+        raw = r.pop("_raw")
+        if iso is not None:
+            lv_iso = iso.apply(raw["logvar"])
+            cal_iso = assess_calibration(raw["y"], raw["mu"], lv_iso, label_sigma=raw["lsig"])
+            r["calibration_isotonic"] = {"ece_sigma": cal_iso.ece_sigma,
+                                         "pit_ks": cal_iso.pit_ks}
+            r["isotonic_calibrator"] = iso.to_json()
         r["checkpoint"] = c.name
         per_seed.append(r)
 
@@ -134,8 +145,9 @@ def evaluate_run(run_dir: str, sequences, *, radius_m: float, normalizer_path: s
         "variance_temperature": _ms(["variance_temperature"]),
         "overall_rmse_mps": _ms(["overall", "rmse_mps"]),
         "overall_bias_mps": _ms(["overall", "bias_mps"]),
-        "ece_sigma": _ms(["calibration", "ece_sigma"]),
-        "pit_ks": _ms(["calibration", "pit_ks"]),
+        "ece_sigma_scalar_T": _ms(["calibration", "ece_sigma"]),
+        "ece_sigma_isotonic": _ms(["calibration_isotonic", "ece_sigma"]),
+        "pit_ks_isotonic": _ms(["calibration_isotonic", "pit_ks"]),
         "per_seed": per_seed,
     }
     (rd / out_name).write_text(json.dumps(summary, indent=2) + "\n",

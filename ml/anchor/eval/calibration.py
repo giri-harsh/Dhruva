@@ -155,3 +155,48 @@ def fit_variance_temperature(
         if r.ece_sigma < best:
             best, best_t = r.ece_sigma, float(t)
     return best_t
+
+
+@dataclass
+class IsotonicVarianceCalibrator:
+    """Per-sigma monotone variance recalibration (a scalar temperature can't fix
+    a SHAPE mismatch — the model over-confident on easy windows, under-confident
+    on hard ones). Fit on val: bin by predicted sigma, map bin-mean predicted
+    sigma -> bin realised RMS error with an isotonic (monotone) regression, then
+    interpolate. `apply(logvar)` returns a recalibrated logvar."""
+    x_knots: np.ndarray            # predicted sigma at bin centres (increasing)
+    y_knots: np.ndarray            # calibrated sigma (isotonic in x)
+    n_fit: int
+
+    @classmethod
+    def fit(cls, y_true, pred_mean, pred_logvar, *, label_sigma=None, n_bins: int = 15):
+        from sklearn.isotonic import IsotonicRegression
+
+        y = np.asarray(y_true, float).ravel()
+        mu = np.asarray(pred_mean, float).ravel()
+        sig = np.sqrt(np.exp(np.asarray(pred_logvar, float).ravel()))
+        if label_sigma is not None:
+            sig = np.sqrt(sig ** 2 + np.asarray(label_sigma, float).ravel() ** 2)
+        err = np.abs(y - mu)
+        order = np.argsort(sig)
+        edges = np.linspace(0, len(y), n_bins + 1).astype(int)
+        xs, ys = [], []
+        for i in range(n_bins):
+            idx = order[edges[i]:edges[i + 1]]
+            if len(idx) < 5:
+                continue
+            xs.append(float(np.mean(sig[idx])))
+            ys.append(float(np.sqrt(np.mean(err[idx] ** 2))))
+        xs, ys = np.array(xs), np.array(ys)
+        iso = IsotonicRegression(increasing=True, out_of_bounds="clip").fit(xs, ys)
+        return cls(x_knots=xs, y_knots=iso.predict(xs), n_fit=len(y))
+
+    def apply(self, pred_logvar: np.ndarray) -> np.ndarray:
+        sig = np.sqrt(np.exp(np.asarray(pred_logvar, float)))
+        cal = np.interp(sig, self.x_knots, self.y_knots)
+        return 2.0 * np.log(np.maximum(cal, 1e-6))
+
+    def to_json(self) -> dict:
+        return {"type": "isotonic_variance", "n_fit": self.n_fit,
+                "sigma_pred_knots": [round(v, 4) for v in self.x_knots],
+                "sigma_calibrated_knots": [round(v, 4) for v in self.y_knots]}
