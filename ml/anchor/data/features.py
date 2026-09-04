@@ -85,40 +85,67 @@ def _best_yaw(accel_lvl: np.ndarray, veh_long_accel: np.ndarray) -> float:
 
 
 def align_sequence_to_vehicle_frame(seq) -> dict:
-    """Returns {'R': 3x3, 'yaw_offset': float, 'yaw_fit_corr': float}."""
+    """Returns {'R': 3x3, 'yaw_offset': float, 'yaw_fit_corr': float}.
+
+    Uses `seq.df` with the SyncedSequence 'phone_'/'veh_' prefixes and the CAN
+    longitudinal accel as the yaw reference. For a phone-only sequence, call
+    `align_phone_only(df, ...)` instead.
+    """
     d = seq.df
     grav = np.c_[d["phone_gravity_x_mps2"], d["phone_gravity_y_mps2"], d["phone_gravity_z_mps2"]]
     accel = np.c_[d["phone_accel_x_mps2"], d["phone_accel_y_mps2"], d["phone_accel_z_mps2"]]
-    lin = accel - grav                      # device-frame linear accel
+    return _align(accel, grav, d["veh_long_accel_mps2"].to_numpy())
 
+
+def align_phone_only(df, *, sample_rate_hz: int = 10) -> dict:
+    """Frame alignment for a phone-only sequence (no CAN). The yaw reference is a
+    longitudinal-accel proxy: d(GPS speed)/dt. This is exactly what Kamal's
+    on-device AlignmentService does at inference (no CAN available there either)."""
+    grav = np.c_[df["gravity_x_mps2"], df["gravity_y_mps2"], df["gravity_z_mps2"]]
+    accel = np.c_[df["accel_x_mps2"], df["accel_y_mps2"], df["accel_z_mps2"]]
+    gps_speed = df["gps_speed_mps"].to_numpy()
+    long_proxy = np.gradient(gps_speed) * sample_rate_hz
+    return _align(accel, grav, long_proxy)
+
+
+def _align(accel: np.ndarray, grav: np.ndarray, long_ref: np.ndarray) -> dict:
+    lin = accel - grav
     R_level = _rotation_gravity_to_down(grav)
     lin_lvl = lin @ R_level.T
-
-    veh_long = d["veh_long_accel_mps2"].to_numpy()
-    theta = _best_yaw(lin_lvl, veh_long)
+    theta = _best_yaw(lin_lvl, long_ref)
     R = _yaw_rotation(theta) @ R_level
-
-    # report the fit quality
     fwd = (lin @ R.T)[:, 0]
-    m = np.isfinite(fwd) & np.isfinite(veh_long)
-    corr = (float(np.corrcoef(fwd[m], veh_long[m])[0, 1])
-            if m.sum() > 200 and np.std(veh_long[m]) > 1e-3 else float("nan"))
+    m = np.isfinite(fwd) & np.isfinite(long_ref)
+    corr = (float(np.corrcoef(fwd[m], long_ref[m])[0, 1])
+            if m.sum() > 200 and np.std(long_ref[m]) > 1e-3 else float("nan"))
     return {"R": R, "yaw_offset": float(theta), "yaw_fit_corr": corr}
 
 
-def sequence_model_features(seq, alignment: dict | None = None) -> np.ndarray:
-    """[T, 6] float32 vehicle-frame model input for the whole sequence, in
-    contract FEATURE_ORDER (accel_x/y/z linear m/s^2, gyro_x/y/z rad/s)."""
-    if alignment is None:
-        alignment = align_sequence_to_vehicle_frame(seq)
-    R = alignment["R"]
-    d = seq.df
-    grav = np.c_[d["phone_gravity_x_mps2"], d["phone_gravity_y_mps2"], d["phone_gravity_z_mps2"]]
-    accel = np.c_[d["phone_accel_x_mps2"], d["phone_accel_y_mps2"], d["phone_accel_z_mps2"]]
-    gyro = np.c_[d["phone_gyro_roll_radps"], d["phone_gyro_pitch_radps"], d["phone_gyro_yaw_radps"]]
-
+def _model_features(accel, grav, gyro, R) -> np.ndarray:
     lin_v = (accel - grav) @ R.T
     gyro_v = gyro @ R.T
     feat = np.concatenate([lin_v, gyro_v], axis=1).astype(np.float32)
     assert feat.shape[1] == len(FEATURE_ORDER) == 6
     return feat
+
+
+def sequence_model_features(seq, alignment: dict | None = None) -> np.ndarray:
+    """[T, 6] float32 vehicle-frame model input for a SyncedSequence, in
+    contract FEATURE_ORDER (accel_x/y/z linear m/s^2, gyro_x/y/z rad/s)."""
+    if alignment is None:
+        alignment = align_sequence_to_vehicle_frame(seq)
+    d = seq.df
+    grav = np.c_[d["phone_gravity_x_mps2"], d["phone_gravity_y_mps2"], d["phone_gravity_z_mps2"]]
+    accel = np.c_[d["phone_accel_x_mps2"], d["phone_accel_y_mps2"], d["phone_accel_z_mps2"]]
+    gyro = np.c_[d["phone_gyro_roll_radps"], d["phone_gyro_pitch_radps"], d["phone_gyro_yaw_radps"]]
+    return _model_features(accel, grav, gyro, alignment["R"])
+
+
+def phone_df_model_features(df, alignment: dict | None = None) -> np.ndarray:
+    """[T, 6] model input for a phone-only canonical DataFrame."""
+    if alignment is None:
+        alignment = align_phone_only(df)
+    grav = np.c_[df["gravity_x_mps2"], df["gravity_y_mps2"], df["gravity_z_mps2"]]
+    accel = np.c_[df["accel_x_mps2"], df["accel_y_mps2"], df["accel_z_mps2"]]
+    gyro = np.c_[df["gyro_roll_radps"], df["gyro_pitch_radps"], df["gyro_yaw_radps"]]
+    return _model_features(accel, grav, gyro, alignment["R"])

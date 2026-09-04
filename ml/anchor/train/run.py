@@ -43,6 +43,8 @@ def main() -> None:
     ap.add_argument("--out", default=None)
     ap.add_argument("--seeds", default=None, help="comma-separated")
     ap.add_argument("--max-epochs", type=int, default=None)
+    ap.add_argument("--init-from", default=None,
+                    help="a Stage-1 pretrain.pt to initialise weights from (PRD §6.6)")
     ap.add_argument("--smoke", action="store_true")
     args = ap.parse_args()
 
@@ -74,7 +76,8 @@ def main() -> None:
     for seed in cfg.seeds:
         print(f"=== seed {seed} ===")
         r = train_one_seed(seed, train_seqs, val_seqs, radius_m=radius,
-                           normalizer=normalizer, cfg=cfg, out_dir=out_dir)
+                           normalizer=normalizer, cfg=cfg, out_dir=out_dir,
+                           init_from=args.init_from)
         print(f"  params={r['n_params']}  best_epoch={r['best_epoch']}  "
               f"val_nll={r['best_val_nll']:.4f}  val_rmse={r['best_val_rmse']:.4f} m/s")
         results.append(r)
@@ -87,6 +90,7 @@ def main() -> None:
             "max_epochs": cfg.max_epochs, "patience": cfg.patience,
             "seeds": list(cfg.seeds), "model_trunk": cfg.model.trunk,
             "model_hidden": cfg.model.hidden,
+            "init_from": args.init_from,
         },
         "wheel_radius_m": round(radius, 5),
         "summary": summarise(results),

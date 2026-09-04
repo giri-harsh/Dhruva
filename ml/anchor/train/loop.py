@@ -94,7 +94,7 @@ def _run_epoch(model, loader, opt, cfg, train: bool, device, *, use_nll: bool,
 
 
 def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: TrainConfig,
-                   out_dir: Path, device="cpu") -> dict:
+                   out_dir: Path, device="cpu", init_from: str | None = None) -> dict:
     _seed_everything(seed, cfg.num_threads)
     aug = BatchAugmenter() if cfg.augment else None
     gen = torch.Generator().manual_seed(seed)
@@ -109,6 +109,11 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
     dl_va = DataLoader(ds_va, batch_size=cfg.batch_size, num_workers=cfg.num_workers)
 
     model = AnchorNet(cfg.model).to(device)
+    if init_from:
+        sd = torch.load(init_from, map_location=device, weights_only=True)
+        missing, unexpected = model.load_state_dict(sd, strict=False)
+        print(f"  seed {seed}: initialised from {Path(init_from).name} "
+              f"(missing {len(missing)}, unexpected {len(unexpected)})", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     lw = max(cfg.lr_warmup_epochs, 1)
     warm = torch.optim.lr_scheduler.LinearLR(opt, start_factor=0.3, total_iters=lw)
