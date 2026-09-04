@@ -32,6 +32,7 @@ jobs:
             ml/tests/test_windower.py `
             ml/tests/test_normalizer.py `
             ml/tests/test_export_and_eval.py `
+            ml/tests/test_reference_golden.py `
             -k "not fr07 and not slow"
       - name: Backend contract-parity tests
         run: python -m pytest -q backend/tests/ -p no:cacheprovider
