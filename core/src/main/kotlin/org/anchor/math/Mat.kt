@@ -78,9 +78,11 @@ class Mat(val rows: Int, val cols: Int, val data: DoubleArray) {
         return Mat(cols, rows, result)
     }
 
-    /** In-place symmetrization: (M + M^T) / 2. Used after Joseph-form
-     *  covariance updates, where floating-point rounding can otherwise
-     *  accumulate a tiny asymmetry over many propagate/update cycles. */
+    /** Returns a symmetrized copy: (M + M^T) / 2. Does not mutate this
+     *  Mat -- like every other operator here, the result must be
+     *  reassigned. Used after Joseph-form covariance updates, where
+     *  floating-point rounding can otherwise accumulate a tiny asymmetry
+     *  over many propagate/update cycles. */
     fun symmetrized(): Mat {
         require(rows == cols) { "symmetrized() requires a square matrix, got ${rows}x$cols" }
         val result = DoubleArray(data.size)

@@ -11,7 +11,7 @@ import org.anchor.math.Vec
  * PS's "innovation gate" concept is exactly this statistical test,
  * independent of which sensor produced the innovation.
  *
- * "This gate detects DISCONTINUOUS disagreement between a measurement and
+ * This gate detects DISCONTINUOUS disagreement between a measurement and
  * what the filter physically believes -- v3 PRD Section15.1 T3's own
  * words: 'detects discontinuous spoofing and multipath', never
  * 'spoof-proof'. A slow, patient drift inside the gate the whole way is
