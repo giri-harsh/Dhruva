@@ -3,7 +3,7 @@
     "run": "week3_twostage",
     "checkpoint": "anchornet_seed1.pt",
     "split": "test_id",
-    "generated_utc": "2026-09-04T09:42:55.288686+00:00"
+    "generated_utc": "2026-09-04T09:53:38.167356+00:00"
   },
   "n": 6109,
   "ece_sigma": 0.1653,
