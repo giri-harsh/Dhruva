@@ -49,6 +49,15 @@ data class Mat3(
         m20 * scalar, m21 * scalar, m22 * scalar,
     )
 
+    /** Added Week 2 (org.anchor.fusion needs R^T for body<->nav velocity
+     *  Jacobians) -- purely additive, does not change any existing
+     *  Mat3 behaviour or the alignment code that already uses this class. */
+    fun transpose(): Mat3 = Mat3(
+        m00, m10, m20,
+        m01, m11, m21,
+        m02, m12, m22,
+    )
+
     companion object {
         val IDENTITY = Mat3(
             1.0, 0.0, 0.0,
