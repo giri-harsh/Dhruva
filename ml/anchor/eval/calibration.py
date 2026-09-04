@@ -124,28 +124,34 @@ def reliability_diagram_points(report: CalibrationReport):
 
 def fit_variance_temperature(
     y_true: np.ndarray, pred_mean: np.ndarray, pred_logvar: np.ndarray,
-    *, label_sigma: np.ndarray | None = None,
+    *, label_sigma: np.ndarray | None = None, objective: str = "ece",
 ) -> float:
-    """Post-hoc single-scalar variance recalibration (temperature scaling for a
-    Gaussian regressor): find T > 0 minimising the val NLL of
-    N(mu, T^2 * exp(logvar) + label_sigma^2). Closed form when label_sigma is 0:
-    T^2 = mean( (y-mu)^2 / exp(logvar) ). With a label floor, one Newton step
-    from that estimate. Store T; apply as logvar' = logvar + 2*ln(T) upstream
-    of the manifest (it multiplies the exported variance, NOT a graph change).
+    """Post-hoc single-scalar Head-B recalibration: pick T > 0 so that
+    N(mu, (T*sigma)^2 + label_sigma^2) is calibrated on this (val) set. Apply as
+    logvar' = logvar + 2*ln(T) upstream of the manifest — it scales the exported
+    variance, NOT a graph change.
+
+    objective="ece"  : 1-D search minimising the variance-bin ECE (what FR-08
+                       actually measures — a shape mismatch a scalar can't fully
+                       fix will show as a floor here).
+    objective="nll"  : closed-form-ish T^2 = mean((y-mu)^2 / var) (+ label floor).
     """
     y = np.asarray(y_true, float).ravel()
     mu = np.asarray(pred_mean, float).ravel()
-    v = np.exp(np.asarray(pred_logvar, float).ravel())
-    se = (y - mu) ** 2
-    if label_sigma is None:
-        t2 = float(np.mean(se / np.maximum(v, 1e-9)))
-    else:
-        ls2 = np.asarray(label_sigma, float).ravel() ** 2
-        t2 = float(np.mean(np.clip((se - ls2), 0, None) / np.maximum(v, 1e-9)))
-        for _ in range(20):  # Newton on d/dT2 of mean NLL
-            ev = t2 * v + ls2
-            g = np.mean(0.5 * v / ev - 0.5 * v * se / ev ** 2)
-            h = np.mean(-0.5 * v ** 2 / ev ** 2 + v ** 2 * se / ev ** 3)
-            step = g / h if abs(h) > 1e-12 else 0.0
-            t2 = max(t2 - step, 1e-6)
-    return float(np.sqrt(t2))
+    lv = np.asarray(pred_logvar, float).ravel()
+    ls = None if label_sigma is None else np.asarray(label_sigma, float).ravel()
+
+    if objective == "nll":
+        v = np.exp(lv); se = (y - mu) ** 2
+        if ls is None:
+            return float(np.sqrt(np.mean(se / np.maximum(v, 1e-9))))
+        t2 = float(np.mean(np.clip(se - ls ** 2, 0, None) / np.maximum(v, 1e-9)))
+        return float(np.sqrt(max(t2, 1e-6)))
+
+    grid = np.geomspace(0.3, 4.0, 60)
+    best_t, best = 1.0, np.inf
+    for t in grid:
+        r = assess_calibration(y, mu, lv + 2 * np.log(t), label_sigma=ls, n_bins=10)
+        if r.ece_sigma < best:
+            best, best_t = r.ece_sigma, float(t)
+    return best_t
