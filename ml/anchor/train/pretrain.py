@@ -74,8 +74,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--iovnbd-root", default=_DEFAULT_IOVNBD)
     ap.add_argument("--out", default=None)
-    ap.add_argument("--epochs", type=int, default=30)
-    ap.add_argument("--warmup", type=int, default=6)
+    ap.add_argument("--epochs", type=int, default=20)
+    ap.add_argument("--warmup", type=int, default=99,
+                    help="epochs of pure MSE before beta-NLL. Default 99 = MSE-only: "
+                         "pre-training just needs the vibration->speed features, not a "
+                         "calibrated variance head (Stage-2 fine-tune calibrates).")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
@@ -131,7 +134,7 @@ def main() -> None:
             rmse = float(torch.sqrt(torch.mean((pv - yva) ** 2)))
             bias = float((pv - yva).mean())
         star = ""
-        if use_nll and rmse < best[0]:
+        if rmse < best[0] and ep >= 2:      # skip the first noisy epochs
             best = (rmse, ep)
             torch.save(net.state_dict(), out_dir / "pretrain.pt")
             star = "  *"
