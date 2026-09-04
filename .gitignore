@@ -50,3 +50,5 @@ backend/_flywheel/
 
 ml/.cache/features_unsync/
 ml/train/pretrain/
+
+ml/eval/plots/

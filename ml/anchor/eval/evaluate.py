@@ -121,9 +121,13 @@ def evaluate_run(run_dir: str, sequences, *, radius_m: float, normalizer_path: s
         if iso is not None:
             lv_iso = iso.apply(raw["logvar"])
             cal_iso = assess_calibration(raw["y"], raw["mu"], lv_iso, label_sigma=raw["lsig"])
-            r["calibration_isotonic"] = {"ece_sigma": cal_iso.ece_sigma,
-                                         "pit_ks": cal_iso.pit_ks}
+            r["calibration_isotonic"] = cal_iso.as_dict()
             r["isotonic_calibrator"] = iso.to_json()
+            # in-distribution (val) calibration after the SAME isotonic map — the
+            # honest "achievable" number; the test one is "under domain shift"
+            val_iso = assess_calibration(vraw["y"], vraw["mu"], iso.apply(vraw["logvar"]),
+                                         label_sigma=vraw["lsig"])
+            r["calibration_isotonic_val"] = val_iso.as_dict()
         r["checkpoint"] = c.name
         per_seed.append(r)
 
@@ -146,8 +150,9 @@ def evaluate_run(run_dir: str, sequences, *, radius_m: float, normalizer_path: s
         "overall_rmse_mps": _ms(["overall", "rmse_mps"]),
         "overall_bias_mps": _ms(["overall", "bias_mps"]),
         "ece_sigma_scalar_T": _ms(["calibration", "ece_sigma"]),
-        "ece_sigma_isotonic": _ms(["calibration_isotonic", "ece_sigma"]),
-        "pit_ks_isotonic": _ms(["calibration_isotonic", "pit_ks"]),
+        "ece_sigma_isotonic_test": _ms(["calibration_isotonic", "ece_sigma"]),
+        "ece_sigma_isotonic_val": _ms(["calibration_isotonic_val", "ece_sigma"]),
+        "pit_ks_isotonic_test": _ms(["calibration_isotonic", "pit_ks"]),
         "per_seed": per_seed,
     }
     (rd / out_name).write_text(json.dumps(summary, indent=2) + "\n",

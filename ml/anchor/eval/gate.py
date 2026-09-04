@@ -49,13 +49,19 @@ def main() -> None:
     win = evaluate_run(str(run_dir), splits[args.split], radius_m=radius,
                        normalizer_path=str(norm_path), val_sequences=splits["val"])
     (_ROOT / "ml" / "eval").mkdir(parents=True, exist_ok=True)
-    # dashboard wants the best seed's calibration bins
     best = min(win["per_seed"], key=lambda r: r["overall"]["rmse_mps"])
+    cal_report = {
+        "provenance": {"run": run_dir.name, "checkpoint": best["checkpoint"],
+                       "split": args.split,
+                       "generated_utc": datetime.now(timezone.utc).isoformat()},
+        "scalar_T": {"temperature": best.get("variance_temperature"),
+                     **best["calibration"]},
+        "isotonic_test_ood": best.get("calibration_isotonic"),
+        "isotonic_val_indist": best.get("calibration_isotonic_val"),
+        "calibrator": best.get("isotonic_calibrator"),
+    }
     (_ROOT / "ml" / "eval" / "calibration_report.json").write_text(
-        json.dumps({"provenance": {"run": run_dir.name, "checkpoint": best["checkpoint"],
-                                   "split": args.split, "generated_utc": datetime.now(timezone.utc).isoformat()},
-                    **best["calibration"]}, indent=2) + "\n",
-        encoding="utf-8", newline="\n")
+        json.dumps(cal_report, indent=2) + "\n", encoding="utf-8", newline="\n")
 
     # 2. outage bench: ANCHOR-Net DR vs B1 (same harness)
     from ..bench.run_baselines import run as run_bench
@@ -80,7 +86,8 @@ def main() -> None:
             "overall_rmse_mps": win["overall_rmse_mps"],
             "overall_bias_mps": win["overall_bias_mps"],
             "ece_sigma_scalar_T": win["ece_sigma_scalar_T"],
-            "ece_sigma_isotonic": win["ece_sigma_isotonic"],
+            "ece_sigma_isotonic_val_indist": win["ece_sigma_isotonic_val"],
+            "ece_sigma_isotonic_test_ood": win["ece_sigma_isotonic_test"],
             "variance_temperature": win["variance_temperature"],
         },
         "drift_vs_B1": rows,
@@ -90,9 +97,23 @@ def main() -> None:
     }
     (run_dir / "gate.json").write_text(json.dumps(gate, indent=2) + "\n",
                                        encoding="utf-8", newline="\n")
-    # also to the committed dashboard/artefact dir (run dir is git-ignored)
     (_ROOT / "ml" / "eval" / "gate_summary.json").write_text(
         json.dumps(gate, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+    # render the plots for slides + the dashboard
+    try:
+        from . import plots
+        plots.reliability_diagram(cal_report["isotonic_val_indist"],
+                                  cal_report["isotonic_test_ood"])
+        plots.error_growth(bench)
+        gj = json.loads((_ROOT / "ml" / "golden" / "public_baseline.json").read_text())
+        plots.golden_scenarios(gj)
+        rj = _ROOT / "ml" / "eval" / "integrity_roc.json"
+        if rj.is_file():
+            plots.integrity_roc(json.loads(rj.read_text()))
+        print("wrote ml/eval/plots/*.png")
+    except Exception as e:  # plotting must never fail the gate
+        print(f"(plots skipped: {e})")
 
     print(json.dumps(gate, indent=2))
     print(f"\nwrote {run_dir}/gate.json, ml/eval/gate_summary.json, "
