@@ -43,10 +43,16 @@ ROWS: list[AblationRow] = [
                       "integration, RUNNABLE. test_id median drift 71/124/117/160% "
                       "@ 30/60/120/180 s (quadratic error growth, PRD §1.2)."),
     AblationRow(2, "b2_nhc", "+ NHC", owner="kamal",
-                notes="needs reference/anchor_ref/eskf.py"),
+                notes="an NHC-only (no ZUPT) intermediate row -- reference/anchor_ref/"
+                      "eskf.py now exists but dispatches NHC/ZUPT together per FR-10/26 "
+                      "(NHC suppressed exactly when ZUPT is active), not as a separately "
+                      "selectable mode; this row still needs that split, or a decision "
+                      "that the table skips straight from B2 to B3"),
     AblationRow(3, "b3_nhc_zupt", "+ NHC + ZUPT (B3)", owner="kamal",
-                notes="the ablation that decides whether the ML earns its place; "
-                      "reference/anchor_ref/eskf.py interface spec in that README"),
+                notes="reference/anchor_ref/eskf.py implemented and runnable "
+                      "(android/week3-reference-eskf) -- see ml/tests/test_eskf.py for "
+                      "scenario coverage and that file's own README for the ablation "
+                      "runner to wire this row's numbers in via ml.anchor.bench.run_baselines"),
     AblationRow(4, "vel_fixed_r", "+ velocity head, fixed R", owner="ml",
                 train=_cfg(), variance_mode="fixed_R"),
     AblationRow(5, "vel_pred_var", "+ velocity head, predicted sigma^2 -> R  (primary claim)",

@@ -13,11 +13,28 @@ Harshit maintains this; **Kamal's Kotlin `core/` must reproduce its arithmetic**
 | | file | status |
 |---|---|---|
 | **B2** strapdown INS, no learning | `strapdown.py` | ✅ complete, runnable |
-| **B3** ESKF + NHC + ZUPT | `eskf.py` | ⛔ **Kamal's** — not yet present |
+| **B3** ESKF + NHC + ZUPT | `eskf.py` | ✅ complete, runnable (Kamal, `android/week3-reference-eskf`) |
 
 `import reference.anchor_ref as ref` exposes `ref.strapdown_dead_reckon` always
-and `ref.eskf_dead_reckon` + `ref.HAS_ESKF == True` once `eskf.py` lands. The
-harness's `B3Eskf.runnable` flips automatically.
+and `ref.eskf_dead_reckon` + `ref.HAS_ESKF == True` now that `eskf.py` has
+landed. The harness's `B3Eskf.runnable` flips automatically — see
+`ml/tests/test_eskf.py` for scenario coverage (stationary/ZUPT,
+straight/turning NHC, gated velocity fusion, chi-square rejection) and
+`ml/tests/test_reference_golden.py::test_eskf_golden_vectors_reproduce`
+for the regression guard.
+
+**`eskf.py`'s state is not a full 3-D port of `core/.../fusion`'s 15-state
+design** — `feat_window` is gravity-REMOVED linear acceleration (identical
+to what ANCHOR-Net consumes), so there is no gravity signal to mechanize or
+correct 3-D attitude from. The state is `strapdown.py`'s own reduced
+(east, north, v_east, v_north, heading), extended with exactly the states a
+genuine ESKF needs: accelerometer bias (forward, lateral) and gyroscope
+bias (yaw). Full derivation, the fixed heading-rate sign this function uses
+in place of `strapdown_dead_reckon`'s own per-call calibration (this
+interface carries no pre-outage data to calibrate against), and a real bug
+found in `strapdown.py`'s own body→world rotation while building this (not
+fixed here — flagged for a separate decision) are documented in
+`eskf.py`'s own module docstring.
 
 ## The interface `eskf.py` must provide (B3)
 

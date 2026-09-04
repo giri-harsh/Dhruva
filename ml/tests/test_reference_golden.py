@@ -28,3 +28,23 @@ def test_strapdown_golden_vectors_reproduce():
         assert np.allclose(r["east_m"], ex["east_m"], atol=tol), f"{v['name']}: east drift"
         assert np.allclose(r["north_m"], ex["north_m"], atol=tol), f"{v['name']}: north drift"
         assert abs(r["heading_end_rad"] - ex["heading_end_rad"]) < tol
+
+
+def test_eskf_golden_vectors_reproduce():
+    from reference.anchor_ref import eskf_dead_reckon
+
+    doc = json.loads((_ROOT / "reference" / "golden" / "eskf_vectors.json").read_text())
+    tol = doc["tolerance_abs"]
+    assert doc["vectors"], "no golden vectors"
+    for v in doc["vectors"]:
+        inp = v["input"]
+        feat = np.array(inp["feat_window"], dtype=np.float64)
+        kw = {"dt_s": doc["dt_s"], "v0_mps": inp["v0_mps"], "heading0_rad": inp["heading0_rad"]}
+        if "vel_mean_mps" in inp:
+            kw["vel_mean_mps"] = np.array(inp["vel_mean_mps"], dtype=np.float64)
+            kw["vel_logvar"] = np.array(inp["vel_logvar"], dtype=np.float64)
+        r = eskf_dead_reckon(feat, **kw)
+        ex = v["expected"]
+        assert np.allclose(r["east_m"], ex["east_m"], atol=tol), f"{v['name']}: east drift"
+        assert np.allclose(r["north_m"], ex["north_m"], atol=tol), f"{v['name']}: north drift"
+        assert abs(r["heading_end_rad"] - ex["heading_end_rad"]) < tol
