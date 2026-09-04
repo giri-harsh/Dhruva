@@ -18,6 +18,7 @@ import torch
 from torch.utils.data import Dataset
 
 from ..contract import SAMPLE_RATE_HZ, WINDOW_SIZE_SAMPLES
+from ..data.context_labels import ContextLabeller
 from ..data.features import align_sequence_to_vehicle_frame, sequence_model_features
 from ..data.labels import SequenceLabeller
 from ..splits.normalizer import Normalizer
@@ -54,11 +55,13 @@ class AnchorWindowDataset(Dataset):
         augmenter: Augmenter | None = None,
         seed: int = 0,
         weak_weight: float = 0.4,
+        with_context: bool = False,
     ):
         self.norm = normalizer
         self.training = training
         self.aug = augmenter if training else None
         self._rng = np.random.default_rng(seed)
+        self.with_context = with_context
 
         win = SequenceWindower(training=training)
         self.feats: dict[str, np.ndarray] = {}
@@ -66,6 +69,7 @@ class AnchorWindowDataset(Dataset):
         self._target = []          # mean speed per window (precomputed once)
         self._sigma = []           # label sigma on SPEED per window (precomputed once)
         self._mean_w = []          # mean-head loss weight (down-weight `weak` seqs)
+        self._ctx = []             # motion-context class (Head C), 0/1/2
         win_dur_s = WINDOW_SIZE_SAMPLES / SAMPLE_RATE_HZ
         for seq in sequences:
             u = seq.meta.get("usability")
@@ -74,14 +78,18 @@ class AnchorWindowDataset(Dataset):
             w_seq = 1.0 if u == "use" else weak_weight
             self.feats[seq.seq_id] = aligned_features(seq)
             lab = SequenceLabeller(seq, radius_m)
+            clab = ContextLabeller(seq) if with_context else None
             for w in win.windows(seq):
                 wl = lab.label(w.start, w.stop)
                 self.index.append((seq.seq_id, w.start, w.stop))
                 self._target.append(wl.mean_speed_mps)
                 self._sigma.append(wl.label_sigma_m / win_dur_s)
                 self._mean_w.append(w_seq)
+                if clab is not None:
+                    self._ctx.append(clab.label(w.start, w.stop).cls)
         self._target = np.asarray(self._target, dtype=np.float32)
         self._sigma = np.asarray(self._sigma, dtype=np.float32)
+        self._ctx = np.asarray(self._ctx, dtype=np.int64)
         self._mean_w = np.asarray(self._mean_w, dtype=np.float32)
 
     def __len__(self) -> int:
@@ -99,13 +107,20 @@ class AnchorWindowDataset(Dataset):
             window = self.aug(window, self._rng)
 
         x = self.norm.transform(window[None])[0]             # [20, 6] normalised
-        return {
+        item = {
             "x": torch.from_numpy(np.ascontiguousarray(x, dtype=np.float32)),
             "target_speed": torch.tensor(self._target[i], dtype=torch.float32),
             "label_sigma": torch.tensor(self._sigma[i], dtype=torch.float32),
             "mean_weight": torch.tensor(self._mean_w[i], dtype=torch.float32),
             "seq_id": seq_id,
         }
+        if self.with_context:
+            item["context_label"] = torch.tensor(self._ctx[i], dtype=torch.long)
+        return item
+
+    def context_class_counts(self):
+        import numpy as _np
+        return _np.bincount(self._ctx, minlength=3).tolist() if len(self._ctx) else [0, 0, 0]
 
     # speed-decile re-weighting sampler weights (PRD §6.6 class balance).
     # `power` softens it (full inverse-freq reweighting measurably hurt overall

@@ -56,7 +56,8 @@ def _seed_everything(s: int, threads: int = 5):
 def _run_epoch(model, loader, opt, cfg, train: bool, device, *, use_nll: bool,
                augmenter=None, gen=None):
     model.train(train)
-    agg = {"loss": 0.0, "nll": 0.0, "rmse": 0.0, "bias": 0.0, "sigma": 0.0, "n": 0}
+    agg = {"loss": 0.0, "nll": 0.0, "rmse": 0.0, "bias": 0.0, "sigma": 0.0,
+           "ctx_correct": 0.0, "ctx_n": 0.0, "n": 0}
     for batch in loader:
         x = batch["x"].to(device)
         if train and augmenter is not None:
@@ -71,9 +72,13 @@ def _run_epoch(model, loader, opt, cfg, train: bool, device, *, use_nll: bool,
                 out["velocity_mean_mps"], out["velocity_log_variance"], y, ls,
                 use_nll=use_nll, sample_weight=w)
             if "context_logits" in out and "context_label" in batch:
-                loss = loss + cfg.lambda_context * context_loss(
-                    out["context_logits"], batch["context_label"].to(device),
-                    batch["context_mask"].to(device))
+                cl = batch["context_label"].to(device)
+                if cfg.lambda_context > 0:
+                    loss = loss + cfg.lambda_context * context_loss(out["context_logits"], cl)
+                with torch.no_grad():
+                    pred = out["context_logits"][:, :3].argmax(-1)
+                    agg["ctx_correct"] += float((pred == cl).sum())
+                    agg["ctx_n"] += float(cl.numel())
             if "yaw_increment_rad" in out and "yaw_target" in batch:
                 loss = loss + cfg.lambda_yaw * yaw_loss(
                     out["yaw_increment_rad"], out["yaw_log_variance"], batch["yaw_target"].to(device))
@@ -90,7 +95,9 @@ def _run_epoch(model, loader, opt, cfg, train: bool, device, *, use_nll: bool,
         agg["sigma"] += stats["pred_sigma_mean"] * bs
         agg["n"] += bs
     n = max(agg["n"], 1)
-    return {k: agg[k] / n for k in ("loss", "nll", "rmse", "bias", "sigma")}
+    r = {k: agg[k] / n for k in ("loss", "nll", "rmse", "bias", "sigma")}
+    r["ctx_acc"] = (agg["ctx_correct"] / agg["ctx_n"]) if agg["ctx_n"] else None
+    return r
 
 
 def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: TrainConfig,
@@ -98,10 +105,14 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
     _seed_everything(seed, cfg.num_threads)
     aug = BatchAugmenter() if cfg.augment else None
     gen = torch.Generator().manual_seed(seed)
+    ctx = cfg.model.enable_context_head
     ds_tr = AnchorWindowDataset(train_seqs, radius_m=radius_m, normalizer=normalizer,
-                                training=True, augmenter=None, seed=seed)
+                                training=True, augmenter=None, seed=seed, with_context=ctx)
     ds_va = AnchorWindowDataset(val_seqs, radius_m=radius_m, normalizer=normalizer,
-                                training=False, seed=seed)
+                                training=False, seed=seed, with_context=ctx)
+    if ctx:
+        print(f"  seed {seed}: Head C on — context class counts (idle/normal/rough) "
+              f"{ds_tr.context_class_counts()}", flush=True)
     sw = ds_tr.sample_weights(power=cfg.sample_weight_power, cap=cfg.sample_weight_cap)
     sampler = WeightedRandomSampler(sw.tolist(), len(ds_tr), replacement=True)
     dl_tr = DataLoader(ds_tr, batch_size=cfg.batch_size, sampler=sampler,
@@ -139,11 +150,13 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
                         "train": tr, "val": va, "s": dt})
         improved = va["rmse"] < best["val_rmse"] - 1e-3
         if improved and (use_nll or epoch >= cfg.warmup_epochs - 2):
-            best = {"val_rmse": va["rmse"], "val_nll": va["nll"], "epoch": epoch,
+            best = {"val_rmse": va["rmse"], "val_nll": va["nll"],
+                    "val_ctx_acc": va.get("ctx_acc"), "epoch": epoch,
                     "state": {k: v.cpu().clone() for k, v in model.state_dict().items()}}
+        ctx = f" ctx_acc={va['ctx_acc']:.3f}" if va.get("ctx_acc") is not None else ""
         print(f"  seed {seed} e{epoch:03d} {dt:5.1f}s [{'nll' if use_nll else 'mse'}]  "
               f"tr_rmse={tr['rmse']:.3f} val_rmse={va['rmse']:.3f} "
-              f"val_bias={va['bias']:+.2f} sigma={va['sigma']:.2f}"
+              f"val_bias={va['bias']:+.2f} sigma={va['sigma']:.2f}{ctx}"
               f"{'  *' if improved else ''}", flush=True)
         if best["epoch"] >= 0 and epoch - best["epoch"] >= cfg.patience:
             break
@@ -157,6 +170,9 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
         "best_epoch": best["epoch"],
         "best_val_nll": best.get("val_nll"),
         "best_val_rmse": best["val_rmse"] if best["epoch"] >= 0 else None,
+        "best_val_ctx_acc": best.get("val_ctx_acc"),
+        "lambda_context": cfg.lambda_context,
+        "context_head": cfg.model.enable_context_head,
         "epochs_run": len(history),
         "history": history,
     }
@@ -167,12 +183,17 @@ def train_one_seed(seed, train_seqs, val_seqs, *, radius_m, normalizer, cfg: Tra
 
 def summarise(results: list[dict]) -> dict:
     def ms(key):
-        v = np.array([r[key] for r in results if r[key] is not None], dtype=float)
+        vals = [r.get(key) for r in results if r.get(key) is not None]
+        if not vals:
+            return None
+        v = np.array(vals, dtype=float)
         return {"mean": round(float(v.mean()), 5), "std": round(float(v.std()), 5), "n": len(v)}
     return {
         "n_params": results[0]["n_params"],
         "val_nll": ms("best_val_nll"),
         "val_rmse_mps": ms("best_val_rmse"),
+        "val_ctx_acc": ms("best_val_ctx_acc"),
+        "lambda_context": results[0].get("lambda_context"),
         "best_epoch": ms("best_epoch"),
         "seeds": [r["seed"] for r in results],
     }
