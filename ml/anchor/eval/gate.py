@@ -44,9 +44,10 @@ def main() -> None:
     splits = assign_all(seqs)
     radius = fit_wheel_radius(splits["train"]).radius_m
 
-    # 1. window-level + calibration, over all seeds
+    # 1. window-level + calibration, over all seeds. Head-B variance temperature
+    #    is fitted on `val` and applied to the reported (test) calibration.
     win = evaluate_run(str(run_dir), splits[args.split], radius_m=radius,
-                       normalizer_path=str(norm_path))
+                       normalizer_path=str(norm_path), val_sequences=splits["val"])
     (_ROOT / "ml" / "eval").mkdir(parents=True, exist_ok=True)
     # dashboard wants the best seed's calibration bins
     best = min(win["per_seed"], key=lambda r: r["overall"]["rmse_mps"])
@@ -78,8 +79,9 @@ def main() -> None:
         "window_level": {
             "overall_rmse_mps": win["overall_rmse_mps"],
             "overall_bias_mps": win["overall_bias_mps"],
-            "ece_sigma": win["ece_sigma"],
-            "pit_ks": win["pit_ks"],
+            "ece_sigma_calibrated": win["ece_sigma"],
+            "pit_ks_calibrated": win["pit_ks"],
+            "variance_temperature": win["variance_temperature"],
         },
         "drift_vs_B1": rows,
         "fr24_rejected_windows": bench["baselines"].get("ANCHORNET", {}).get("fr24_rejected_windows"),
@@ -88,9 +90,13 @@ def main() -> None:
     }
     (run_dir / "gate.json").write_text(json.dumps(gate, indent=2) + "\n",
                                        encoding="utf-8", newline="\n")
+    # also to the committed dashboard/artefact dir (run dir is git-ignored)
+    (_ROOT / "ml" / "eval" / "gate_summary.json").write_text(
+        json.dumps(gate, indent=2) + "\n", encoding="utf-8", newline="\n")
 
     print(json.dumps(gate, indent=2))
-    print(f"\nwrote {run_dir}/gate.json and ml/eval/calibration_report.json")
+    print(f"\nwrote {run_dir}/gate.json, ml/eval/gate_summary.json, "
+          f"ml/eval/calibration_report.json")
 
 
 if __name__ == "__main__":

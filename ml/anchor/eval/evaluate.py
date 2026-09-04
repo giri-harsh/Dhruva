@@ -20,7 +20,7 @@ from ..data.labels import SequenceLabeller
 from ..models.anchornet import AnchorNet, AnchorNetConfig
 from ..splits.normalizer import Normalizer
 from ..splits.windower import SequenceWindower
-from .calibration import assess_calibration
+from .calibration import assess_calibration, fit_variance_temperature
 
 _WIN_DUR_S = WINDOW_SIZE_SAMPLES / SAMPLE_RATE_HZ
 
@@ -34,6 +34,7 @@ def evaluate_split(
     radius_m: float,
     model_cfg: AnchorNetConfig | None = None,
     include_drop: bool = True,
+    variance_temperature: float = 1.0,   # post-hoc Head-B recalibration (fit on val)
 ) -> dict:
     net = AnchorNet(model_cfg or AnchorNetConfig())
     net.load_state_dict(torch.load(checkpoint_path, map_location="cpu", weights_only=True))
@@ -65,8 +66,9 @@ def evaluate_split(
     y = np.array(y); mu = np.array(mu); logvar = np.array(logvar)
     lsig = np.array(lsig); speeds = np.array(speeds); usab = np.array(usab)
     err = mu - y
+    logvar_cal = logvar + 2.0 * np.log(max(variance_temperature, 1e-6))
 
-    cal = assess_calibration(y, mu, logvar, label_sigma=lsig)
+    cal = assess_calibration(y, mu, logvar_cal, label_sigma=lsig)
 
     def _slice(mask):
         if mask.sum() == 0:
@@ -82,21 +84,35 @@ def evaluate_split(
 
     return {
         "n_windows": len(y),
+        "variance_temperature": round(float(variance_temperature), 4),
         "overall": _slice(np.ones_like(y, bool)),
         "by_speed_decile": by_decile,
         "by_usability": by_usability,
         "calibration": cal.as_dict(),
+        "_raw": {"y": y, "mu": mu, "logvar": logvar, "lsig": lsig},  # for temp fitting
     }
 
 
-def evaluate_run(run_dir: str, sequences, *, radius_m: float,
-                 normalizer_path: str, out_name: str = "eval_windows.json") -> dict:
+def evaluate_run(run_dir: str, sequences, *, radius_m: float, normalizer_path: str,
+                 out_name: str = "eval_windows.json",
+                 val_sequences=None) -> dict:
+    """If `val_sequences` is given, a per-seed Head-B variance temperature is
+    fitted on val and applied to the reported (test) calibration."""
     rd = Path(run_dir)
     ckpts = sorted(rd.glob("anchornet_seed*.pt"))
     per_seed = []
     for c in ckpts:
+        T = 1.0
+        if val_sequences is not None:
+            vr = evaluate_split(val_sequences, checkpoint_path=str(c),
+                                normalizer_path=normalizer_path, radius_m=radius_m)
+            raw = vr["_raw"]
+            T = fit_variance_temperature(raw["y"], raw["mu"], raw["logvar"],
+                                         label_sigma=raw["lsig"])
         r = evaluate_split(sequences, checkpoint_path=str(c),
-                           normalizer_path=normalizer_path, radius_m=radius_m)
+                           normalizer_path=normalizer_path, radius_m=radius_m,
+                           variance_temperature=T)
+        r.pop("_raw", None)
         r["checkpoint"] = c.name
         per_seed.append(r)
 
@@ -115,6 +131,7 @@ def evaluate_run(run_dir: str, sequences, *, radius_m: float,
 
     summary = {
         "n_seeds": len(per_seed),
+        "variance_temperature": _ms(["variance_temperature"]),
         "overall_rmse_mps": _ms(["overall", "rmse_mps"]),
         "overall_bias_mps": _ms(["overall", "bias_mps"]),
         "ece_sigma": _ms(["calibration", "ece_sigma"]),

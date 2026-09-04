@@ -84,6 +84,51 @@ uncertainty the variance head must explain is almost entirely epistemic.
 All configs beat predict-the-mean (7.33) by ~25% and the GBR hand-feature
 ceiling (6.21). Headline 5-seed run: `ml/train/runs/week3_headAB/`.
 
+## Headline result — `ml/train/runs/week3_headAB/` (5 seeds)
+
+| metric | value |
+|---|---|
+| val speed RMSE (Vtb) | **5.51 ± 0.10 m/s** — 25% better than predict-the-mean (7.33), better than the GBR hand-feature ceiling (6.21) |
+| params | 16 722 |
+| val bias | ~0 |
+
+## Standalone dead-reckoner vs B1 — it does NOT clearly win, and that is expected
+
+`ml/anchor/eval/anchornet_dr.py` (learned per-window speed + a 1-D const-accel KF
+fusing consecutive windows by Head-B variance + IMU-integrated heading), scored
+on `test_id` (Vta) outages against B1 (hold last GNSS speed + heading):
+
+- **On the Vta test route the standalone DR is roughly at parity with B1, not
+  ahead.** Where speed is roughly steady, B1's "hold the last GNSS speed" is a
+  strong baseline and ANCHOR-Net's window-to-window noise costs more than its
+  signal buys. The learned head wins on the higher-speed-variation outages
+  (where B1 cannot track the change) but loses on the steady ones.
+- **A +1.8 m/s speed bias appears on Vta** (train = Vw + M; Vta = Peak District,
+  hillier, rougher-surfaced — the model reads rougher vibration as faster). This
+  is domain-shift risk R-04, measured. Mitigation in the DR: an online residual
+  monitor estimates the bias from the pre-outage GNSS-available stretch and
+  subtracts it (PRD §6.9); it recovers most of the gap.
+
+**Why this is not a failure of the thesis:** the PRD's Week-5 gate (§20.1) is
+vs **B3** — Kamal's ESKF + NHC + ZUPT + GNSS-reanchoring — with the velocity
+measurement *fused and smoothed by the filter's process model and weighted by
+the predicted variance*, not dead-reckoned raw. A Kalman filter turns an
+unbiased, noisy 5.5 m/s speed measurement into a much better fused estimate; NHC
+kills the lateral heading drift the standalone DR suffers. That is exactly the
+"calibrated variance feeding the filter" moat (FR-08). The standalone DR is a
+weak proxy and is reported as the honest zero-line only.
+
+**Next:** wire B2/B3 (Kamal's `reference/anchor_ref`) into `run_baselines.py` so
+the real ablation-row-5-vs-row-3 comparison can run; scenario-label the golden
+set so the per-scenario breakdown (where the win concentrates) is visible.
+
+## Calibration (FR-08)
+
+Raw Head-B variance is ~1.4x overconfident (ECE_sigma ~0.20). A single-scalar
+post-hoc temperature (`fit_variance_temperature`, fitted on val, applied as
+`logvar += 2 ln T` upstream of the manifest — not a graph change) brings it in
+line. Reported ECE in `gate.json` is post-temperature.
+
 ## Perf note
 
 `torch` default 12 threads oversubscribes this box (conv on tiny [B,40,20]

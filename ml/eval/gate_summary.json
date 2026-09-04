@@ -1,0 +1,55 @@
+{
+  "generated_utc": "2026-09-04T09:09:50.806797+00:00",
+  "run": "week3_headAB",
+  "split": "test_id",
+  "window_level": {
+    "overall_rmse_mps": {
+      "mean": 5.6798,
+      "std": 0.098
+    },
+    "overall_bias_mps": {
+      "mean": 1.8273,
+      "std": 0.2244
+    },
+    "ece_sigma_calibrated": {
+      "mean": 0.3486,
+      "std": 0.1042
+    },
+    "pit_ks_calibrated": {
+      "mean": 0.1879,
+      "std": 0.0146
+    },
+    "variance_temperature": {
+      "mean": 1.6152,
+      "std": 0.1653
+    }
+  },
+  "drift_vs_B1": [
+    {
+      "duration_s": 30,
+      "B1_drift_pct": 36.671,
+      "ANCHORNET_drift_pct": 35.264,
+      "rel_improvement_vs_B1_pct": 3.8
+    },
+    {
+      "duration_s": 60,
+      "B1_drift_pct": 49.586,
+      "ANCHORNET_drift_pct": 49.597,
+      "rel_improvement_vs_B1_pct": -0.0
+    },
+    {
+      "duration_s": 120,
+      "B1_drift_pct": 61.631,
+      "ANCHORNET_drift_pct": 63.692,
+      "rel_improvement_vs_B1_pct": -3.3
+    },
+    {
+      "duration_s": 180,
+      "B1_drift_pct": 73.274,
+      "ANCHORNET_drift_pct": 86.87,
+      "rel_improvement_vs_B1_pct": -18.6
+    }
+  ],
+  "fr24_rejected_windows": 440,
+  "note": "B3 (Kamal's ESKF+NHC+ZUPT) is the real Week-5 bar; B1 shown here as the honest zero-line until B3 is wired into this harness."
+}

@@ -1,0 +1,104 @@
+{
+  "provenance": {
+    "run": "week3_headAB",
+    "checkpoint": "anchornet_seed0.pt",
+    "split": "test_id",
+    "generated_utc": "2026-09-04T09:09:01.273077+00:00"
+  },
+  "n": 6109,
+  "ece_sigma": 0.338,
+  "ece_sigma_abs_m": 1.895,
+  "pit_ks": 0.1729,
+  "coverage": {
+    "0.5": [
+      0.495,
+      0.383
+    ],
+    "1.0": [
+      0.818,
+      0.683
+    ],
+    "1.5": [
+      0.947,
+      0.866
+    ],
+    "2.0": [
+      0.978,
+      0.954
+    ]
+  },
+  "overall_rmse_m": 5.5522,
+  "mean_pred_sigma_m": 7.0419,
+  "bins": [
+    {
+      "sigma_pred_m": 1.4902,
+      "err_rms_m": 2.3105,
+      "count": 610,
+      "sigma_lo_m": 0.8152,
+      "sigma_hi_m": 2.514
+    },
+    {
+      "sigma_pred_m": 3.9605,
+      "err_rms_m": 4.5283,
+      "count": 611,
+      "sigma_lo_m": 2.5148,
+      "sigma_hi_m": 5.292
+    },
+    {
+      "sigma_pred_m": 5.8499,
+      "err_rms_m": 5.5229,
+      "count": 611,
+      "sigma_lo_m": 5.293,
+      "sigma_hi_m": 6.3429
+    },
+    {
+      "sigma_pred_m": 6.6825,
+      "err_rms_m": 5.7384,
+      "count": 611,
+      "sigma_lo_m": 6.3455,
+      "sigma_hi_m": 6.9894
+    },
+    {
+      "sigma_pred_m": 7.2725,
+      "err_rms_m": 5.5799,
+      "count": 611,
+      "sigma_lo_m": 6.99,
+      "sigma_hi_m": 7.5346
+    },
+    {
+      "sigma_pred_m": 7.8057,
+      "err_rms_m": 5.496,
+      "count": 611,
+      "sigma_lo_m": 7.5347,
+      "sigma_hi_m": 8.0673
+    },
+    {
+      "sigma_pred_m": 8.3056,
+      "err_rms_m": 5.6789,
+      "count": 611,
+      "sigma_lo_m": 8.0684,
+      "sigma_hi_m": 8.5609
+    },
+    {
+      "sigma_pred_m": 8.8499,
+      "err_rms_m": 6.3511,
+      "count": 611,
+      "sigma_lo_m": 8.5609,
+      "sigma_hi_m": 9.1513
+    },
+    {
+      "sigma_pred_m": 9.4874,
+      "err_rms_m": 6.2872,
+      "count": 611,
+      "sigma_lo_m": 9.1518,
+      "sigma_hi_m": 9.8747
+    },
+    {
+      "sigma_pred_m": 10.706,
+      "err_rms_m": 6.7448,
+      "count": 611,
+      "sigma_lo_m": 9.8749,
+      "sigma_hi_m": 14.4722
+    }
+  ]
+}

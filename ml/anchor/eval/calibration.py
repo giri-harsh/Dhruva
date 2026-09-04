@@ -120,3 +120,32 @@ def reliability_diagram_points(report: CalibrationReport):
     """(predicted sigma, realised rms error) per bin — for the dashboard plot.
     A perfectly calibrated model lies on y = x."""
     return [(b["sigma_pred_m"], b["err_rms_m"]) for b in report.bins]
+
+
+def fit_variance_temperature(
+    y_true: np.ndarray, pred_mean: np.ndarray, pred_logvar: np.ndarray,
+    *, label_sigma: np.ndarray | None = None,
+) -> float:
+    """Post-hoc single-scalar variance recalibration (temperature scaling for a
+    Gaussian regressor): find T > 0 minimising the val NLL of
+    N(mu, T^2 * exp(logvar) + label_sigma^2). Closed form when label_sigma is 0:
+    T^2 = mean( (y-mu)^2 / exp(logvar) ). With a label floor, one Newton step
+    from that estimate. Store T; apply as logvar' = logvar + 2*ln(T) upstream
+    of the manifest (it multiplies the exported variance, NOT a graph change).
+    """
+    y = np.asarray(y_true, float).ravel()
+    mu = np.asarray(pred_mean, float).ravel()
+    v = np.exp(np.asarray(pred_logvar, float).ravel())
+    se = (y - mu) ** 2
+    if label_sigma is None:
+        t2 = float(np.mean(se / np.maximum(v, 1e-9)))
+    else:
+        ls2 = np.asarray(label_sigma, float).ravel() ** 2
+        t2 = float(np.mean(np.clip((se - ls2), 0, None) / np.maximum(v, 1e-9)))
+        for _ in range(20):  # Newton on d/dT2 of mean NLL
+            ev = t2 * v + ls2
+            g = np.mean(0.5 * v / ev - 0.5 * v * se / ev ** 2)
+            h = np.mean(-0.5 * v ** 2 / ev ** 2 + v ** 2 * se / ev ** 3)
+            step = g / h if abs(h) > 1e-12 else 0.0
+            t2 = max(t2 - step, 1e-6)
+    return float(np.sqrt(t2))
