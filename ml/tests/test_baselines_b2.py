@@ -4,8 +4,11 @@ import pytest
 from anchor.bench.baselines import B2Strapdown, B3Eskf
 
 
-def test_b3_not_runnable_until_kamal_ships_eskf():
-    assert B3Eskf().runnable is False
+def test_b3_runnable_now_that_eskf_ships():
+    # anchor_ref/eskf.py has landed -- see ml/tests/test_eskf.py for B3's
+    # own scenario coverage; this file keeps only the runnable-flag check
+    # for B2/B3 side by side.
+    assert B3Eskf().runnable is True
 
 
 def test_strapdown_straight_constant_speed_tracks_true_path():
