@@ -1,0 +1,202 @@
+{
+  "schema": "PRD \u00a76.7 13-row ablation",
+  "rows": [
+    {
+      "n": 1,
+      "key": "b2_strapdown",
+      "label": "Strapdown INS only (B2)",
+      "owner": "ml",
+      "notes": "reference/anchor_ref/strapdown.py \u2014 physics-only double integration, RUNNABLE. test_id median drift 71/124/117/160% @ 30/60/120/180 s (quadratic error growth, PRD \u00a71.2).",
+      "status": "done",
+      "results": {
+        "outage_by_duration": {
+          "30": 70.644,
+          "60": 124.491,
+          "120": 116.826,
+          "180": 159.621
+        }
+      }
+    },
+    {
+      "n": 2,
+      "key": "b2_nhc",
+      "label": "+ NHC",
+      "owner": "kamal",
+      "notes": "needs reference/anchor_ref/eskf.py",
+      "status": "external",
+      "results": null
+    },
+    {
+      "n": 3,
+      "key": "b3_nhc_zupt",
+      "label": "+ NHC + ZUPT (B3)",
+      "owner": "kamal",
+      "notes": "the ablation that decides whether the ML earns its place; reference/anchor_ref/eskf.py interface spec in that README",
+      "status": "external",
+      "results": null
+    },
+    {
+      "n": 4,
+      "key": "vel_fixed_r",
+      "label": "+ velocity head, fixed R",
+      "owner": "ml",
+      "notes": "",
+      "status": "done",
+      "results": {
+        "note": "same model as row 5; fixed-R vs predicted-sigma^2 is a fusion-side choice \u2014 realised inside Kamal's filter (needs B3). Standalone DR uses predicted var."
+      }
+    },
+    {
+      "n": 5,
+      "key": "vel_pred_var",
+      "label": "+ velocity head, predicted sigma^2 -> R  (primary claim)",
+      "owner": "ml",
+      "notes": "",
+      "status": "done",
+      "results": {
+        "window": {
+          "val_rmse_mps": {
+            "mean": 5.45862,
+            "std": 0.02709,
+            "n": 3
+          },
+          "val_ctx_acc": null,
+          "lambda_context": null,
+          "n_params": 16722
+        },
+        "outage": [
+          {
+            "duration_s": 30,
+            "B1_drift_pct": 36.671,
+            "ANCHORNET_drift_pct": 33.909,
+            "rel_improvement_vs_B1_pct": 7.5
+          },
+          {
+            "duration_s": 60,
+            "B1_drift_pct": 49.586,
+            "ANCHORNET_drift_pct": 50.936,
+            "rel_improvement_vs_B1_pct": -2.7
+          },
+          {
+            "duration_s": 120,
+            "B1_drift_pct": 61.631,
+            "ANCHORNET_drift_pct": 63.124,
+            "rel_improvement_vs_B1_pct": -2.4
+          },
+          {
+            "duration_s": 180,
+            "B1_drift_pct": 73.274,
+            "ANCHORNET_drift_pct": 78.072,
+            "rel_improvement_vs_B1_pct": -6.5
+          }
+        ]
+      }
+    },
+    {
+      "n": 6,
+      "key": "ctx_head",
+      "label": "+ context head -> adaptive noise",
+      "owner": "ml",
+      "notes": "",
+      "status": "done",
+      "results": {
+        "window": {
+          "val_rmse_mps": {
+            "mean": 5.47842,
+            "std": 0.04231,
+            "n": 3
+          },
+          "val_ctx_acc": {
+            "mean": 0.68447,
+            "std": 0.00629,
+            "n": 3
+          },
+          "lambda_context": 0.2,
+          "n_params": 17647
+        }
+      }
+    },
+    {
+      "n": 7,
+      "key": "lambda_c",
+      "label": "lambda_c = 0 vs > 0",
+      "owner": "ml",
+      "notes": "run with lambda_context=0 and >0, report both",
+      "status": "done",
+      "results": {
+        "lambda_c=0": {
+          "mean": 5.44005,
+          "std": 0.01166,
+          "n": 3
+        },
+        "lambda_c=0.2": {
+          "mean": 5.47842,
+          "std": 0.04231,
+          "n": 3
+        },
+        "ctx_acc@lambda_c=0.2": {
+          "mean": 0.68447,
+          "std": 0.00629,
+          "n": 3
+        },
+        "verdict": "CUT Head C \u2014 velocity 5.478 vs 5.440 m/s (worse), and Head C acc 0.68 ~ majority-class 0.68 (CAN roughness label not discriminative on IO-VNBD). Fall back to fixed R + Kamal's deterministic detectors (PRD \u00a76.5)."
+      }
+    },
+    {
+      "n": 8,
+      "key": "head_d",
+      "label": "+ Head D (learned yaw increment)",
+      "owner": "ml",
+      "notes": "",
+      "status": "pending",
+      "results": null
+    },
+    {
+      "n": 9,
+      "key": "map_match",
+      "label": "map matching: forward-only vs fixed-lag Viterbi",
+      "owner": "kamal",
+      "notes": "",
+      "status": "external",
+      "results": null
+    },
+    {
+      "n": 10,
+      "key": "road_manifold",
+      "label": "+ road-manifold constraint",
+      "owner": "kamal",
+      "notes": "",
+      "status": "external",
+      "results": null
+    },
+    {
+      "n": 11,
+      "key": "mag_memory",
+      "label": "+ magnetic route memory",
+      "owner": "kamal",
+      "notes": "",
+      "status": "external",
+      "results": null
+    },
+    {
+      "n": 12,
+      "key": "gru",
+      "label": "GRU variant (rejected alternative)",
+      "owner": "ml",
+      "notes": "if it wins we say so and switch (PRD \u00a76.5)",
+      "status": "pending",
+      "results": null
+    },
+    {
+      "n": 13,
+      "key": "ood",
+      "label": "Out-of-distribution (France, Nigeria)",
+      "owner": "ml",
+      "notes": "row 5 config, evaluated on the unsynchronised France/Nigeria phone data with GNSS-derived labels; reported separately",
+      "status": "pending",
+      "results": null
+    }
+  ],
+  "headline_row": "vel_pred_var",
+  "generated_utc": "2026-09-04T10:51:25.910495+00:00"
+}

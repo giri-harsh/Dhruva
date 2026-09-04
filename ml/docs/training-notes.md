@@ -175,6 +175,37 @@ Vta test set — better and far more stable, though above the ~0.05 target becau
 val (Vtb) → test (Vta) is itself a distribution shift. On in-distribution
 synthetic data isotonic reaches ECE 0.025.
 
+## Head C (motion context, S-15) — ablation row 7 says CUT it
+
+3 seeds each, fine-tuned from the two-stage pre-train:
+
+| λ_c | val speed RMSE | Head C val acc |
+|---|---|---|
+| 0 (head present, untrained) | **5.440 ± 0.012** | 0.21 (random) |
+| 0.2 (head trained) | 5.478 ± 0.042 | **0.684 ± 0.006** |
+
+Head C's val accuracy (0.68) is exactly the "always predict `normal`"
+majority-class rate — the CAN wheel-speed-jitter roughness label is not
+discriminative enough on IO-VNBD — and training it costs the primary velocity
+head ~0.04 m/s. So: **cut Head C for the demo, fall back to fixed R + Kamal's
+deterministic detectors** (the PRD §6.5 fallback). The infra stays (`--context`,
+`ContextLabeller`, ablation row 7) in case a better roughness signal makes it
+worthwhile later.
+
+## FR-31 integrity bench — done, reference-detector profile
+
+`python -m anchor.integrity.run_bench --check`. Per-attack-instance detection
+(flagged within a family horizon of onset), phone-like GNSS noise (4 m, 1 Hz),
+committed expected curve. The reference `InnovationResidualDetector` (Kamal's
+`ChiSquareGate` replaces it):
+
+| family | result at 2 % false-rejection |
+|---|---|
+| step | **provably undetected ≤ 5 m**; ≥ 40 m always caught |
+| drag | ~0.5–0.8 caught within 25 s (innovation gates weak on slow ramps) |
+| jam | ~0.16 false-reject in the 3–10 s reacquisition window |
+| multipath | ≤ 0.1 affected-fraction undetected; 0.9 → 0.96 |
+
 ## Calibration (FR-08)
 
 Raw Head-B variance is ~1.4x overconfident (ECE_sigma ~0.20). A single-scalar

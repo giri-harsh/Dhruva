@@ -71,16 +71,25 @@ def collect() -> dict[str, dict]:
     return out
 
 
+_CTX_MAJORITY_ACC = 0.68        # val "always predict normal" rate (see context_labels)
+
+
 def _lambda_verdict(lc0: dict, lc02: dict) -> str:
     a = (lc0["val_rmse_mps"] or {}).get("mean")
     b = (lc02["val_rmse_mps"] or {}).get("mean")
+    acc = (lc02["val_ctx_acc"] or {}).get("mean", 0.0)
     if a is None or b is None:
         return "pending"
-    if b <= a + 0.05:
-        return (f"lambda_c=0.2 does NOT hurt the velocity head "
-                f"({b:.3f} vs {a:.3f} m/s) and Head C reaches "
-                f"{(lc02['val_ctx_acc'] or {}).get('mean', 0):.2f} acc -> keep the aux head")
-    return f"lambda_c=0.2 HURTS velocity ({b:.3f} vs {a:.3f}) -> cut Head C"
+    hurts = b > a + 0.03
+    ctx_works = acc > _CTX_MAJORITY_ACC + 0.05
+    if not hurts and ctx_works:
+        return (f"keep — lambda_c=0.2 doesn't hurt velocity ({b:.3f} vs {a:.3f}) "
+                f"and Head C ({acc:.2f}) beats majority-class ({_CTX_MAJORITY_ACC})")
+    return (f"CUT Head C — velocity {b:.3f} vs {a:.3f} m/s "
+            f"({'worse' if hurts else 'noise'}), and Head C acc {acc:.2f} "
+            f"~ majority-class {_CTX_MAJORITY_ACC} (CAN roughness label not "
+            f"discriminative on IO-VNBD). Fall back to fixed R + Kamal's "
+            f"deterministic detectors (PRD §6.5).")
 
 
 def main() -> None:
