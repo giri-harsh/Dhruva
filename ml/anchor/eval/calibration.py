@@ -120,3 +120,83 @@ def reliability_diagram_points(report: CalibrationReport):
     """(predicted sigma, realised rms error) per bin — for the dashboard plot.
     A perfectly calibrated model lies on y = x."""
     return [(b["sigma_pred_m"], b["err_rms_m"]) for b in report.bins]
+
+
+def fit_variance_temperature(
+    y_true: np.ndarray, pred_mean: np.ndarray, pred_logvar: np.ndarray,
+    *, label_sigma: np.ndarray | None = None, objective: str = "ece",
+) -> float:
+    """Post-hoc single-scalar Head-B recalibration: pick T > 0 so that
+    N(mu, (T*sigma)^2 + label_sigma^2) is calibrated on this (val) set. Apply as
+    logvar' = logvar + 2*ln(T) upstream of the manifest — it scales the exported
+    variance, NOT a graph change.
+
+    objective="ece"  : 1-D search minimising the variance-bin ECE (what FR-08
+                       actually measures — a shape mismatch a scalar can't fully
+                       fix will show as a floor here).
+    objective="nll"  : closed-form-ish T^2 = mean((y-mu)^2 / var) (+ label floor).
+    """
+    y = np.asarray(y_true, float).ravel()
+    mu = np.asarray(pred_mean, float).ravel()
+    lv = np.asarray(pred_logvar, float).ravel()
+    ls = None if label_sigma is None else np.asarray(label_sigma, float).ravel()
+
+    if objective == "nll":
+        v = np.exp(lv); se = (y - mu) ** 2
+        if ls is None:
+            return float(np.sqrt(np.mean(se / np.maximum(v, 1e-9))))
+        t2 = float(np.mean(np.clip(se - ls ** 2, 0, None) / np.maximum(v, 1e-9)))
+        return float(np.sqrt(max(t2, 1e-6)))
+
+    grid = np.geomspace(0.3, 4.0, 60)
+    best_t, best = 1.0, np.inf
+    for t in grid:
+        r = assess_calibration(y, mu, lv + 2 * np.log(t), label_sigma=ls, n_bins=10)
+        if r.ece_sigma < best:
+            best, best_t = r.ece_sigma, float(t)
+    return best_t
+
+
+@dataclass
+class IsotonicVarianceCalibrator:
+    """Per-sigma monotone variance recalibration (a scalar temperature can't fix
+    a SHAPE mismatch — the model over-confident on easy windows, under-confident
+    on hard ones). Fit on val: bin by predicted sigma, map bin-mean predicted
+    sigma -> bin realised RMS error with an isotonic (monotone) regression, then
+    interpolate. `apply(logvar)` returns a recalibrated logvar."""
+    x_knots: np.ndarray            # predicted sigma at bin centres (increasing)
+    y_knots: np.ndarray            # calibrated sigma (isotonic in x)
+    n_fit: int
+
+    @classmethod
+    def fit(cls, y_true, pred_mean, pred_logvar, *, label_sigma=None, n_bins: int = 15):
+        from sklearn.isotonic import IsotonicRegression
+
+        y = np.asarray(y_true, float).ravel()
+        mu = np.asarray(pred_mean, float).ravel()
+        sig = np.sqrt(np.exp(np.asarray(pred_logvar, float).ravel()))
+        if label_sigma is not None:
+            sig = np.sqrt(sig ** 2 + np.asarray(label_sigma, float).ravel() ** 2)
+        err = np.abs(y - mu)
+        order = np.argsort(sig)
+        edges = np.linspace(0, len(y), n_bins + 1).astype(int)
+        xs, ys = [], []
+        for i in range(n_bins):
+            idx = order[edges[i]:edges[i + 1]]
+            if len(idx) < 5:
+                continue
+            xs.append(float(np.mean(sig[idx])))
+            ys.append(float(np.sqrt(np.mean(err[idx] ** 2))))
+        xs, ys = np.array(xs), np.array(ys)
+        iso = IsotonicRegression(increasing=True, out_of_bounds="clip").fit(xs, ys)
+        return cls(x_knots=xs, y_knots=iso.predict(xs), n_fit=len(y))
+
+    def apply(self, pred_logvar: np.ndarray) -> np.ndarray:
+        sig = np.sqrt(np.exp(np.asarray(pred_logvar, float)))
+        cal = np.interp(sig, self.x_knots, self.y_knots)
+        return 2.0 * np.log(np.maximum(cal, 1e-6))
+
+    def to_json(self) -> dict:
+        return {"type": "isotonic_variance", "n_fit": self.n_fit,
+                "sigma_pred_knots": [round(v, 4) for v in self.x_knots],
+                "sigma_calibrated_knots": [round(v, 4) for v in self.y_knots]}

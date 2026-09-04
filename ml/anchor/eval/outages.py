@@ -41,8 +41,12 @@ class OutageSpec:
         return f"{self.seq_id}:{self.seg_index}:{self.start_row}:{self.duration_s}"
 
 
-def sample_outages(sequences, *, seed: int, per_duration_per_seq: int = 2) -> list[OutageSpec]:
+def sample_outages(sequences, *, seed: int, per_duration_per_seq: int = 2,
+                   label_scenarios: bool = True) -> list[OutageSpec]:
+    from .scenarios import classify_window
+
     rng = np.random.default_rng(seed)
+    by_id = {s.seq_id: s for s in sequences}
     out: list[OutageSpec] = []
     for seq in sorted(sequences, key=lambda s: s.seq_id):
         speed = seq.df["veh_speed_mps"].to_numpy()
@@ -59,5 +63,7 @@ def sample_outages(sequences, *, seed: int, per_duration_per_seq: int = 2) -> li
                 picks = rng.choice(cands, size=min(per_duration_per_seq, len(cands)),
                                    replace=False)
                 for p in sorted(int(x) for x in picks):
-                    out.append(OutageSpec(seq.seq_id, si, p, dur))
+                    scen = (classify_window(seq, p, p + need)
+                            if label_scenarios else "unlabelled")
+                    out.append(OutageSpec(seq.seq_id, si, p, dur, scenario=scen))
     return out

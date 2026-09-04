@@ -84,6 +84,135 @@ uncertainty the variance head must explain is almost entirely epistemic.
 All configs beat predict-the-mean (7.33) by ~25% and the GBR hand-feature
 ceiling (6.21). Headline 5-seed run: `ml/train/runs/week3_headAB/`.
 
+## Headline result — `ml/train/runs/week3_headAB/` (5 seeds)
+
+| metric | value |
+|---|---|
+| val speed RMSE (Vtb) | **5.51 ± 0.10 m/s** — 25% better than predict-the-mean (7.33), better than the GBR hand-feature ceiling (6.21) |
+| params | 16 722 |
+| val bias | ~0 |
+
+## Standalone dead-reckoner vs B1 — it does NOT clearly win, and that is expected
+
+`ml/anchor/eval/anchornet_dr.py` (learned per-window speed + a 1-D const-accel KF
+fusing consecutive windows by Head-B variance + IMU-integrated heading), scored
+on `test_id` (Vta) outages against B1 (hold last GNSS speed + heading):
+
+- **On the Vta test route the standalone DR is roughly at parity with B1, not
+  ahead.** Where speed is roughly steady, B1's "hold the last GNSS speed" is a
+  strong baseline and ANCHOR-Net's window-to-window noise costs more than its
+  signal buys. The learned head wins on the higher-speed-variation outages
+  (where B1 cannot track the change) but loses on the steady ones.
+- **A +1.8 m/s speed bias appears on Vta** (train = Vw + M; Vta = Peak District,
+  hillier, rougher-surfaced — the model reads rougher vibration as faster). This
+  is domain-shift risk R-04, measured. Mitigation in the DR: an online residual
+  monitor estimates the bias from the pre-outage GNSS-available stretch and
+  subtracts it (PRD §6.9); it recovers most of the gap.
+
+**Why this is not a failure of the thesis:** the PRD's Week-5 gate (§20.1) is
+vs **B3** — Kamal's ESKF + NHC + ZUPT + GNSS-reanchoring — with the velocity
+measurement *fused and smoothed by the filter's process model and weighted by
+the predicted variance*, not dead-reckoned raw. A Kalman filter turns an
+unbiased, noisy 5.5 m/s speed measurement into a much better fused estimate; NHC
+kills the lateral heading drift the standalone DR suffers. That is exactly the
+"calibrated variance feeding the filter" moat (FR-08). The standalone DR is a
+weak proxy and is reported as the honest zero-line only.
+
+**Next:** wire B2/B3 (Kamal's `reference/anchor_ref`) into `run_baselines.py` so
+the real ablation-row-5-vs-row-3 comparison can run; scenario-label the golden
+set so the per-scenario breakdown (where the win concentrates) is visible.
+
+## Two-stage (pre-train on unsync -> fine-tune on sync) — helps, as the PRD predicted
+
+`ml/train/runs/week3_twostage` = `run.py --init-from
+ml/train/pretrain/week3_stage1/pretrain.pt` (Stage-1: MSE on ~23 h unsync
+France+Vw, GNSS weak labels, val RMSE 2.85).
+
+| | from scratch (`week3_headAB`) | two-stage (`week3_twostage`) |
+|---|---|---|
+| val speed RMSE (Vtb) | 5.51 ± 0.10 | **5.46 ± 0.03** (much tighter across seeds) |
+| Vta bias | +1.83 m/s | **+1.22 m/s** (domain shift cut ~1/3) |
+| DR drift vs B1 @ 30/60/120/180 s | +3.8 / −0 / −3.3 / **−18.6** % | **+7.5 / −2.7 / −2.4 / −6.5** % |
+| best epoch | ~20 | ~14 |
+
+The pre-train is a strong, consistent initialisation: it cuts the domain-shift
+bias by a third and improves the standalone drift at every outage duration
+(the 180 s degradation shrinks from −19 % to −7 %). The standalone DR is
+essentially **at parity with B1** on a random outage sample — marginally ahead at
+short outages, marginally behind at long ones.
+
+## Golden set (PRD §14.7) — per-scenario, the standalone DR is poor on the hard ones
+
+`ml/golden/manifest.json` — 40 frozen outage segments, test splits only,
+stratified by scenario × duration; the first 10 (by key) are the CI public
+subset. `python -m anchor.golden.regression_gate` scores the DR over them.
+
+Public-subset baseline (two-stage model, `ml/golden/public_baseline.json`):
+**median drift 100 %**, and the per-segment story is the point —
+
+| scenario | drift % |
+|---|---|
+| stop_start | 104, 122, **288** |
+| hard_braking | 153 |
+| sharp_cornering | 15, 52, 64, 101 |
+| roundabout | 98 |
+| motorway_cruise | 73 |
+
+The standalone DR falls apart on **stop-start and hard-braking** — precisely the
+scenarios Kamal's **ZUPT** (a stopped vehicle → ~0 drift) and **NHC** exist to
+handle, and which no amount of velocity-head accuracy fixes without a filter.
+The random-sample gate (parity with B1) was averaging over easy motorway
+stretches; the stratified golden set surfaces the real weakness. This is
+strong evidence for the §20.1 framing: the velocity head's value is realised
+**inside the filter**, not standalone.
+
+## Calibration (FR-08)
+
+Head B is *shape*-miscalibrated, not just scale — a scalar temperature gets
+ECE_sigma to ~0.37 (noisy). `IsotonicVarianceCalibrator` (monotone
+predicted-σ → realised-error map, fit on val) gets it to **0.17 ± 0.01** on the
+Vta test set — better and far more stable, though above the ~0.05 target because
+val (Vtb) → test (Vta) is itself a distribution shift. On in-distribution
+synthetic data isotonic reaches ECE 0.025.
+
+## Head C (motion context, S-15) — ablation row 7 says CUT it
+
+3 seeds each, fine-tuned from the two-stage pre-train:
+
+| λ_c | val speed RMSE | Head C val acc |
+|---|---|---|
+| 0 (head present, untrained) | **5.440 ± 0.012** | 0.21 (random) |
+| 0.2 (head trained) | 5.478 ± 0.042 | **0.684 ± 0.006** |
+
+Head C's val accuracy (0.68) is exactly the "always predict `normal`"
+majority-class rate — the CAN wheel-speed-jitter roughness label is not
+discriminative enough on IO-VNBD — and training it costs the primary velocity
+head ~0.04 m/s. So: **cut Head C for the demo, fall back to fixed R + Kamal's
+deterministic detectors** (the PRD §6.5 fallback). The infra stays (`--context`,
+`ContextLabeller`, ablation row 7) in case a better roughness signal makes it
+worthwhile later.
+
+## FR-31 integrity bench — done, reference-detector profile
+
+`python -m anchor.integrity.run_bench --check`. Per-attack-instance detection
+(flagged within a family horizon of onset), phone-like GNSS noise (4 m, 1 Hz),
+committed expected curve. The reference `InnovationResidualDetector` (Kamal's
+`ChiSquareGate` replaces it):
+
+| family | result at 2 % false-rejection |
+|---|---|
+| step | **provably undetected ≤ 5 m**; ≥ 40 m always caught |
+| drag | ~0.5–0.8 caught within 25 s (innovation gates weak on slow ramps) |
+| jam | ~0.16 false-reject in the 3–10 s reacquisition window |
+| multipath | ≤ 0.1 affected-fraction undetected; 0.9 → 0.96 |
+
+## Calibration (FR-08)
+
+Raw Head-B variance is ~1.4x overconfident (ECE_sigma ~0.20). A single-scalar
+post-hoc temperature (`fit_variance_temperature`, fitted on val, applied as
+`logvar += 2 ln T` upstream of the manifest — not a graph change) brings it in
+line. Reported ECE in `gate.json` is post-temperature.
+
 ## Perf note
 
 `torch` default 12 threads oversubscribes this box (conv on tiny [B,40,20]

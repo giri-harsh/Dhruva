@@ -76,13 +76,22 @@ def gaussian_nll(pred_mean, pred_logvar, target, label_sigma=None, *, logvar_l2=
                       use_nll=True, beta=0.0, logvar_l2=logvar_l2)
 
 
-def context_loss(logits: torch.Tensor, labels: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    """Masked cross-entropy — only the 3 CAN-derived classes have real labels
-    (PRD §6.5). `mask` is 1 where the label is real."""
-    if mask.sum() == 0:
-        return logits.sum() * 0.0
-    ce = F.cross_entropy(logits[mask.bool()], labels[mask.bool()].long())
-    return ce
+def context_loss(logits: torch.Tensor, labels: torch.Tensor,
+                 mask: torch.Tensor | None = None, *, n_real: int = 3) -> torch.Tensor:
+    """Cross-entropy over the `n_real` CAN-derived classes ONLY (PRD §6.5:
+    idle / normal / rough). `impulse` (3) and `handling` (4) have no CAN
+    correlate, so their logits are left unconstrained — the softmax is taken
+    over logits[:, :n_real] and the model never receives a gradient telling it
+    what classes 3/4 should be. `mask` (optional) additionally drops individual
+    windows whose CAN label is untrustworthy."""
+    lg = logits[:, :n_real]
+    lab = labels.long()
+    if mask is not None:
+        m = mask.bool()
+        if m.sum() == 0:
+            return logits.sum() * 0.0
+        lg, lab = lg[m], lab[m]
+    return F.cross_entropy(lg, lab)
 
 
 def yaw_loss(pred_inc: torch.Tensor, pred_logvar: torch.Tensor, target_inc: torch.Tensor) -> torch.Tensor:

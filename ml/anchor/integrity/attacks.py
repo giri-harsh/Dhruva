@@ -51,7 +51,11 @@ class InjectedTrack:
     spec: AttackSpec
 
 
-def inject(seq, spec: AttackSpec, *, seg: tuple[int, int] | None = None) -> InjectedTrack:
+def inject(seq, spec: AttackSpec, *, seg: tuple[int, int] | None = None,
+           gnss_noise_sigma_m: float = 4.0, gnss_rate_hz: float = 1.0) -> InjectedTrack:
+    """VBOX truth is survey-grade; a real phone GNSS is not. Add `gnss_noise_sigma_m`
+    of position noise (open-sky phone ~3-5 m) and quantise to `gnss_rate_hz` so
+    the detector ROC reflects the SNR it will actually face, not VBOX's."""
     a, b = seg or (0, seq.n_rows)
     d = seq.df.iloc[a:b]
     lat = d["veh_gt_lat_deg"].to_numpy()
@@ -61,8 +65,16 @@ def inject(seq, spec: AttackSpec, *, seg: tuple[int, int] | None = None) -> Inje
     onset = int(spec.onset_s * SAMPLE_RATE_HZ)
     rng = np.random.default_rng(spec.seed)
 
+    # phone-like GNSS: a fix only every 1/gnss_rate_hz s, each with a fresh
+    # position error. Between fixes valid=False (no new information).
+    step = max(1, int(SAMPLE_RATE_HZ / gnss_rate_hz))
     ce, cn = te.copy(), tn.copy()
-    valid = np.ones(n, dtype=bool)
+    valid = np.zeros(n, dtype=bool)
+    for k in range(0, n, step):
+        ex, ny = rng.normal(0, gnss_noise_sigma_m, 2)
+        ce[k] = te[k] + ex
+        cn[k] = tn[k] + ny
+        valid[k] = True
     attacked = np.zeros(n, dtype=bool)
 
     if spec.family == "step":

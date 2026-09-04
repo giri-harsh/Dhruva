@@ -63,4 +63,78 @@ class B1ConstantVelocity:
         return e, nth, hdg0
 
 
-ALL_BASELINES: list[Baseline] = [B1ConstantVelocity()]
+def _import_anchor_ref():
+    import sys
+    from pathlib import Path
+    root = str(Path(__file__).resolve().parents[3])
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    import reference.anchor_ref as ref  # type: ignore
+    return ref
+
+
+class _AlignedFeatureMixin:
+    """Shares the per-sequence frame alignment cache with the ANCHOR-Net DR so
+    B2/B3 see the exact same 6-channel input the model sees (PRD §6.3)."""
+    def __init__(self):
+        self._cache: dict = {}
+
+    def _feats(self, seq):
+        if seq.seq_id not in self._cache:
+            from ..data.features import (align_sequence_to_vehicle_frame,
+                                         sequence_model_features)
+            self._cache[seq.seq_id] = sequence_model_features(
+                seq, align_sequence_to_vehicle_frame(seq))
+        return self._cache[seq.seq_id]
+
+    @staticmethod
+    def _pre_outage_gnss(seq, i0, lookback_s=45):
+        d = seq.df
+        lo = max(0, i0 - lookback_s * SAMPLE_RATE_HZ)
+        hdg = np.unwrap(np.radians(d["veh_heading_deg"].to_numpy()[lo:i0]))
+        return lo, np.diff(hdg) / DT_S
+
+
+class B2Strapdown(_AlignedFeatureMixin):
+    id = "B2"
+    name = "strapdown INS, no learning (double integration)"
+    runnable = True
+
+    def predict_outage(self, seq, outage):
+        ref = _import_anchor_ref()
+        d = seq.df
+        i0 = outage.start_row
+        feats = self._feats(seq)[i0:outage.stop_row]
+        v0 = float(d["veh_speed_mps"].to_numpy()[max(i0 - 1, 0)])
+        hdg0 = float(np.radians(d["veh_heading_deg"].to_numpy()[max(i0 - 1, 0)]))
+        lo, hr_pre = self._pre_outage_gnss(seq, i0)
+        gz_pre = self._feats(seq)[lo:i0 - 1, 5]
+        out = ref.strapdown_dead_reckon(
+            feats, dt_s=DT_S, v0_mps=v0, heading0_rad=hdg0,
+            gyro_z_pre=gz_pre, heading_rate_pre_radps=hr_pre)
+        return out["east_m"], out["north_m"], out["heading_end_rad"]
+
+
+class B3Eskf(_AlignedFeatureMixin):
+    id = "B3"
+    name = "ESKF + NHC + ZUPT, no learned velocity (Kamal's reference/anchor_ref)"
+
+    def __init__(self):
+        super().__init__()
+        try:
+            self.runnable = bool(getattr(_import_anchor_ref(), "HAS_ESKF", False))
+        except Exception:
+            self.runnable = False
+
+    def predict_outage(self, seq, outage):
+        ref = _import_anchor_ref()
+        d = seq.df
+        i0 = outage.start_row
+        feats = self._feats(seq)[i0:outage.stop_row]
+        v0 = float(d["veh_speed_mps"].to_numpy()[max(i0 - 1, 0)])
+        hdg0 = float(np.radians(d["veh_heading_deg"].to_numpy()[max(i0 - 1, 0)]))
+        out = ref.eskf_dead_reckon(feats, dt_s=DT_S, v0_mps=v0, heading0_rad=hdg0)
+        return out["east_m"], out["north_m"], out["heading_end_rad"]
+
+
+ALL_BASELINES: list[Baseline] = [B1ConstantVelocity(), B2Strapdown(), B3Eskf()]

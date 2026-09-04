@@ -15,6 +15,7 @@ import pandas as pd
 from . import units
 from .schema import (
     SMARTPHONE_COLUMNS,
+    SMARTPHONE_COLUMNS_18,
     VEHICLE_COLUMNS,
     normalise_header,
     parse_sats_in_range,
@@ -41,6 +42,10 @@ def _read_raw(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path, encoding=CP1252, skipinitialspace=True, dtype=str,
                      keep_default_na=True, na_values=["", "NaN", "nan"])
     df.columns = [normalise_header(c) for c in df.columns]
+    # some unsynchronised exports have a trailing comma on every row -> a phantom
+    # empty last column ("unnamed: N"); drop it if it's entirely empty.
+    while df.columns[-1].startswith("unnamed") and df.iloc[:, -1].isna().all():
+        df = df.iloc[:, :-1]
     return df
 
 
@@ -68,21 +73,33 @@ def _to_float(series: pd.Series) -> np.ndarray:
 def load_smartphone_csv(path: str | Path) -> LoadResult:
     path = Path(path)
     raw = _read_raw(path)
-    warnings = _check_header(raw, SMARTPHONE_COLUMNS, path)
+    if len(raw.columns) == len(SMARTPHONE_COLUMNS_18):
+        spec = SMARTPHONE_COLUMNS_18
+    else:
+        spec = SMARTPHONE_COLUMNS
+    warnings = _check_header(raw, spec, path)
+    reduced = spec is SMARTPHONE_COLUMNS_18
 
-    canon = [c for c, _ in SMARTPHONE_COLUMNS]
+    canon = [c for c, _ in spec]
     src = {canon[i]: raw.iloc[:, i] for i in range(len(canon))}
     out = pd.DataFrame(index=raw.index)
 
-    # pass-through numeric channels (already in project units)
-    for name in ["gps_lat_deg", "gps_lon_deg", "gps_alt_m", "gps_accuracy_m",
-                 "gps_orientation_deg",
-                 "accel_x_mps2", "accel_y_mps2", "accel_z_mps2",
-                 "gravity_x_mps2", "gravity_y_mps2", "gravity_z_mps2",
-                 "gyro_yaw_radps", "gyro_pitch_radps", "gyro_roll_radps",
-                 "mag_x_ut", "mag_y_ut", "mag_z_ut",
-                 "orient_yaw_deg", "orient_pitch_deg", "orient_roll_deg"]:
+    passthrough = ["gps_lat_deg", "gps_lon_deg", "gps_alt_m", "gps_accuracy_m",
+                   "gps_orientation_deg",
+                   "accel_x_mps2", "accel_y_mps2", "accel_z_mps2",
+                   "gravity_x_mps2", "gravity_y_mps2", "gravity_z_mps2",
+                   "gyro_yaw_radps", "gyro_pitch_radps", "gyro_roll_radps"]
+    if not reduced:
+        passthrough += ["mag_x_ut", "mag_y_ut", "mag_z_ut",
+                        "orient_yaw_deg", "orient_pitch_deg", "orient_roll_deg"]
+    for name in passthrough:
         out[name] = _to_float(src[name])
+    if reduced:  # keep the schema uniform for downstream — fill absent channels
+        for name in ["mag_x_ut", "mag_y_ut", "mag_z_ut",
+                     "orient_yaw_deg", "orient_pitch_deg", "orient_roll_deg"]:
+            out[name] = np.nan
+        warnings.append("reduced 18-col schema: magnetometer + orientation-angle "
+                        "channels absent (filled NaN)")
 
     # conversions at the boundary
     out["gps_speed_mps"] = units.kmh_to_mps(_to_float(src["gps_speed_kmh"]))

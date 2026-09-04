@@ -47,3 +47,8 @@ ml/.cache/
 ml/train/runs/
 
 backend/_flywheel/
+
+ml/.cache/features_unsync/
+ml/train/pretrain/
+
+ml/eval/plots/

@@ -44,6 +44,17 @@ class AnchorNetDeadReckoner:
     checkpoint_path: str = ""
     normalizer_path: str = ""
     model_cfg: AnchorNetConfig | None = None
+    heading_mode: str = "gyro"          # "gyro" (integrate aligned yaw rate) | "hold" (B1-style)
+    speed_bias_mps: float = 0.0         # fixed additive speed correction, m/s
+    online_bias: bool = True            # PRD §6.9: estimate the speed bias from the
+                                        # pre-outage stretch where GNSS speed IS
+                                        # available (last known good calibration —
+                                        # not data from inside the outage) and
+                                        # subtract it. The deployed residual monitor.
+    bias_lookback_s: int = 45
+    fuse: bool = True                   # 1-D constant-accel KF over consecutive windows,
+                                        # gain from Head B's predicted variance — a
+                                        # standalone stand-in for what Kamal's ESKF does
 
     def __post_init__(self):
         self._net = AnchorNet(self.model_cfg or AnchorNetConfig())
@@ -65,22 +76,45 @@ class AnchorNetDeadReckoner:
         a, n = outage.start_row, outage.n_rows
         d = seq.df
 
-        # per-10Hz-sample speed from windowed Head A
-        speed = np.empty(n, dtype=np.float64)
-        last_ok = float(d["veh_speed_mps"].to_numpy()[max(a - 1, 0)])
+        # per-window Head A + Head B, then optionally fuse consecutive windows
         w = WINDOW_SIZE_SAMPLES
-        for s in range(0, n, w):
-            win_lo = a + s
-            win = feats[win_lo:win_lo + w]
+        v0 = float(d["veh_speed_mps"].to_numpy()[max(a - 1, 0)])   # last GNSS speed
+        bias = self.speed_bias_mps
+        if self.online_bias:
+            bias += self._estimate_speed_bias(seq, feats, a)
+        # KF state [speed, accel], constant-accel model; measurement = window mean speed
+        x_kf = np.array([v0, 0.0]); P = np.diag([1.0, 1.0])
+        q_acc = 0.6 ** 2                              # process: accel wanders ~0.6 m/s^2 / window
+        speed = np.empty(n, dtype=np.float64)
+        last_ok = v0
+        for si in range(0, n, w):
+            win = feats[a + si:a + si + w]
             if len(win) < w:
                 win = np.pad(win, ((0, w - len(win)), (0, 0)))
-            x = self._norm.transform(win[None]).astype(np.float32)
-            mean_speed = float(self._net(torch.from_numpy(x))["velocity_mean_mps"])
-            if not (MIN_PLAUSIBLE_SPEED_MPS <= mean_speed <= MAX_PLAUSIBLE_SPEED_MPS):
+            xin = self._norm.transform(win[None]).astype(np.float32)
+            out = self._net(torch.from_numpy(xin))
+            z = float(out["velocity_mean_mps"]) - bias
+            r = float(np.exp(out["velocity_log_variance"])) + 0.25    # Head B var + floor
+            if not (MIN_PLAUSIBLE_SPEED_MPS <= z <= MAX_PLAUSIBLE_SPEED_MPS):
                 self.rejected_windows += 1
-                mean_speed = last_ok
-            last_ok = mean_speed
-            speed[s:s + w] = mean_speed
+                z = last_ok
+            last_ok = z
+            if self.fuse:
+                dt = w * DT_S
+                F = np.array([[1.0, dt], [0.0, 1.0]])
+                x_kf = F @ x_kf
+                P = F @ P @ F.T + np.array([[0.25 * dt ** 4, 0.5 * dt ** 3],
+                                            [0.5 * dt ** 3, dt ** 2]]) * q_acc
+                y = z - x_kf[0]; S = P[0, 0] + r
+                K = P[:, 0] / S
+                x_kf = x_kf + K * y
+                P = P - np.outer(K, P[0, :])
+                v_est = max(x_kf[0], 0.0)
+                # fill the window with a linear speed profile [prev_end .. v_est]
+                prev = speed[si - 1] if si > 0 else v0
+                speed[si:si + w] = np.linspace(prev, v_est, min(w, n - si))
+            else:
+                speed[si:si + w] = max(z, 0.0)
 
         # heading: last GNSS heading + integral of aligned vehicle-frame yaw rate.
         # Compass heading is clockwise-from-north; a right-handed +z (up) yaw is a
@@ -89,12 +123,38 @@ class AnchorNetDeadReckoner:
         # PRE-outage stretch where GNSS heading is available (legitimate — it's
         # the last known good calibration, not data from inside the outage).
         hdg0 = float(np.radians(d["veh_heading_deg"].to_numpy()[max(a - 1, 0)]))
-        yaw_rate = feats[a:a + n, GYRO_Z_FEATURE_INDEX].astype(np.float64)
-        sign = self._yaw_sign(seq, feats, a)
-        heading = hdg0 + sign * np.cumsum(yaw_rate) * DT_S
+        if self.heading_mode == "hold":
+            heading = np.full(n, hdg0)
+        else:
+            yaw_rate = feats[a:a + n, GYRO_Z_FEATURE_INDEX].astype(np.float64)
+            sign = self._yaw_sign(seq, feats, a)
+            heading = hdg0 + sign * np.cumsum(yaw_rate) * DT_S
 
         e, nth = integrate_speed_heading(speed, heading, DT_S, p0=(0.0, 0.0))
         return e, nth, float(heading[-1])
+
+    def _estimate_speed_bias(self, seq, feats, outage_start: int) -> float:
+        return self._estimate_speed_bias_from_arrays(
+            feats, seq.df["veh_speed_mps"].to_numpy(), outage_start)
+
+    @torch.no_grad()
+    def _estimate_speed_bias_from_arrays(self, feats, gnss_speed, outage_start: int) -> float:
+        """Median (model speed - GNSS speed) over inference-stride windows in the
+        `bias_lookback_s` before the outage. The on-device residual monitor
+        (PRD §6.9) — reads only rows strictly before `outage_start`."""
+        w = WINDOW_SIZE_SAMPLES
+        lo = max(0, outage_start - self.bias_lookback_s * SAMPLE_RATE_HZ)
+        resid = []
+        for si in range(lo, outage_start - w, w):
+            win = feats[si:si + w]
+            if len(win) < w:
+                continue
+            xin = self._norm.transform(win[None]).astype(np.float32)
+            z = float(self._net(torch.from_numpy(xin))["velocity_mean_mps"])
+            resid.append(z - float(np.mean(gnss_speed[si:si + w])))
+        if len(resid) < 3:
+            return 0.0
+        return float(np.clip(np.median(resid), -8.0, 8.0))
 
     @staticmethod
     def _yaw_sign(seq, feats, outage_start: int, lookback_s: int = 60) -> float:

@@ -79,6 +79,30 @@ VEHICLE_COLUMNS: list[tuple[str, str]] = [
     ("accel_pedal_pct",       "accelerator pedal position (0 or 1)"),  # label lies: 0-100 %
 ]
 
+# --- reduced 18-column smartphone variant (most unsynchronised France S-T*
+#     files): GPS + time/date + accel + gravity + gyro, no magnetometer, no
+#     device-orientation angles. All 6 model-input channels are present.
+SMARTPHONE_COLUMNS_18: list[tuple[str, str]] = [
+    ("gps_lat_deg",          "gps latitude (degrees)"),
+    ("gps_lon_deg",          "gps longitude (degrees)"),
+    ("gps_alt_m",            "gps altitude (m)"),
+    ("gps_speed_kmh",        "gps speed (kmh)"),
+    ("gps_accuracy_m",       "gps accuracy (m)"),
+    ("gps_orientation_deg",  "gps orientation (°)"),
+    ("gps_sats_raw",         "satellites in range"),
+    ("time_since_start_ms",  "time since start (ms)"),
+    ("date_local_raw",       "date (yyyy-mo-dd hh-mi-ss_sss)"),
+    ("accel_x_mps2",         "accelerometer x (m/s²)"),
+    ("accel_y_mps2",         "accelerometer y (m/s²)"),
+    ("accel_z_mps2",         "accelerometer z (m/s²)"),
+    ("gravity_x_mps2",       "gravity x (m/s²)"),
+    ("gravity_y_mps2",       "gravity y (m/s²)"),
+    ("gravity_z_mps2",       "gravity z (m/s²)"),
+    ("gyro_yaw_radps",       "gyroscope yaw (rad/s)"),
+    ("gyro_pitch_radps",     "gyroscope pitch (rad/s)"),
+    ("gyro_roll_radps",      "gyroscope roll (rad/s)"),
+]
+
 SMARTPHONE_CANONICAL = [c for c, _ in SMARTPHONE_COLUMNS]
 VEHICLE_CANONICAL = [c for c, _ in VEHICLE_COLUMNS]
 
